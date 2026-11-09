@@ -1,0 +1,61 @@
+# Databricks Asset Bundle — Lakehouse de Compras Públicas
+# Docs: https://docs.databricks.com/dev-tools/bundles/
+#
+#   databricks bundle validate -t dev
+#   databricks bundle deploy   -t dev
+#   databricks bundle run compras_semanal -t dev
+#
+# O host do workspace vem do perfil da CLI (`databricks auth login`), não do repositório.
+
+bundle:
+  name: compras_lakehouse
+
+include:
+  - resources/*.yml
+
+artifacts:
+  compras_wheel:
+    type: whl
+    build: uv build --wheel
+    path: .
+    # O serverless guarda o ambiente em cache pelo nome do wheel; com a versão fixa
+    # (0.1.0) um redeploy poderia continuar rodando o código antigo. Isto acrescenta um
+    # carimbo de tempo à versão a cada deploy.
+    dynamic_version: true
+
+variables:
+  catalog:
+    description: Catálogo do Unity Catalog (Free Edition sem permissão de criar catálogo → use "workspace")
+    default: dev_compras
+  ingestao_no_job:
+    description: >-
+      "true": a task de ingestão do job baixa os dados da API (modo padrão). "false" só em
+      emergência, quando o workspace não alcança dadosabertos.compras.gov.br: a ingestão roda
+      fora (scripts/ingestao_semanal.ps1) e o job apenas confere o landing.
+    default: "true"
+  agendamento:
+    description: >-
+      Agendamento semanal do job, segunda às 06:00 (PAUSED | UNPAUSED). Use PAUSED junto com
+      ingestao_no_job=false, porque nesse caso quem inicia o job é o script de ingestão.
+    default: UNPAUSED
+  warehouse_id:
+    description: SQL warehouse do dashboard
+    lookup:
+      warehouse: "Serverless Starter Warehouse"
+
+targets:
+  dev:
+    mode: development
+    default: true
+    variables:
+      catalog: dev_compras
+
+  prod:
+    mode: production
+    variables:
+      catalog: prd_compras
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    permissions:
+      - user_name: ${workspace.current_user.userName}
+        level: CAN_MANAGE

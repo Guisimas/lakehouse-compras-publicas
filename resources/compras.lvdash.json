@@ -1,0 +1,768 @@
+{
+  "datasets": [
+    {
+      "name": "kpis",
+      "displayName": "KPIs",
+      "queryLines": [
+        "SELECT COUNT(DISTINCT id_compra) AS compras, COUNT(*) AS itens, SUM(valor_total_item) AS valor_total\n",
+        "FROM gold.fato_compras\n",
+        "WHERE NOT compra_excluida\n"
+      ]
+    },
+    {
+      "name": "orgaos",
+      "displayName": "Gasto por órgão",
+      "queryLines": [
+        "SELECT o.nome_orgao_superior AS orgao, SUM(f.valor_total_item) AS valor_total\n",
+        "FROM gold.fato_compras f\n",
+        "JOIN gold.dim_orgao o ON o.sk_orgao = f.sk_orgao\n",
+        "WHERE NOT f.compra_excluida\n",
+        "GROUP BY 1\n",
+        "ORDER BY 2 DESC\n",
+        "LIMIT 15\n"
+      ]
+    },
+    {
+      "name": "mensal",
+      "displayName": "Evolução mensal",
+      "queryLines": [
+        "SELECT to_date(concat(cast(d.ano_mes AS string), '01'), 'yyyyMMdd') AS mes,\n",
+        "       m.regime_legal,\n",
+        "       SUM(f.valor_total_item) AS valor_total\n",
+        "FROM gold.fato_compras f\n",
+        "JOIN gold.dim_data d ON d.sk_data = f.sk_data_publicacao\n",
+        "JOIN gold.dim_modalidade m ON m.sk_modalidade = f.sk_modalidade\n",
+        "WHERE NOT f.compra_excluida\n",
+        "GROUP BY ALL\n"
+      ]
+    },
+    {
+      "name": "modalidades",
+      "displayName": "Modalidades",
+      "queryLines": [
+        "SELECT m.grupo, m.regime_legal, SUM(f.valor_total_item) AS valor_total\n",
+        "FROM gold.fato_compras f\n",
+        "JOIN gold.dim_modalidade m ON m.sk_modalidade = f.sk_modalidade\n",
+        "WHERE NOT f.compra_excluida\n",
+        "GROUP BY ALL\n"
+      ]
+    },
+    {
+      "name": "fornecedores",
+      "displayName": "Top fornecedores (contratos)",
+      "queryLines": [
+        "SELECT df.ni_fornecedor, MAX(df.razao_social) AS razao_social, MAX(df.porte_nome) AS porte,\n",
+        "       COUNT(*) AS contratos, SUM(f.valor_global) AS valor_global\n",
+        "FROM gold.fato_contratos f\n",
+        "JOIN gold.dim_fornecedor df ON df.sk_fornecedor = f.sk_fornecedor\n",
+        "WHERE NOT f.excluido AND f.sk_fornecedor <> -1\n",
+        "GROUP BY df.ni_fornecedor\n",
+        "ORDER BY valor_global DESC\n",
+        "LIMIT 25\n"
+      ]
+    },
+    {
+      "name": "dq",
+      "displayName": "Resultados de qualidade",
+      "queryLines": [
+        "SELECT data_execucao, run_id, regra, dimensao, severidade, entidade, janela, camada,\n",
+        "       linhas_avaliadas, linhas_reprovadas, status, detalhe\n",
+        "FROM quality.dq_resultados\n",
+        "WHERE data_execucao >= current_timestamp() - INTERVAL 30 DAYS\n"
+      ]
+    },
+    {
+      "name": "quarentena",
+      "displayName": "Quarentena por regra",
+      "queryLines": [
+        "SELECT entidade, regra, COUNT(*) AS registros\n",
+        "FROM (\n",
+        "  SELECT 'licitacoes' AS entidade, explode(regra_violada) AS regra\n",
+        "  FROM quality.quarentena_licitacoes WHERE NOT resolvido\n",
+        "  UNION ALL SELECT 'itens_compra', explode(regra_violada)\n",
+        "  FROM quality.quarentena_itens_compra WHERE NOT resolvido\n",
+        "  UNION ALL SELECT 'contratos', explode(regra_violada)\n",
+        "  FROM quality.quarentena_contratos WHERE NOT resolvido\n",
+        "  UNION ALL SELECT 'fornecedores', explode(regra_violada)\n",
+        "  FROM quality.quarentena_fornecedores WHERE NOT resolvido\n",
+        ")\n",
+        "GROUP BY ALL\n"
+      ]
+    },
+    {
+      "name": "ingestao",
+      "displayName": "Ingestão",
+      "queryLines": [
+        "SELECT entidade,\n",
+        "       MAX(fim) FILTER (WHERE status = 'sucesso') AS ultima_carga_ok,\n",
+        "       SUM(linhas) FILTER (WHERE fim >= current_timestamp() - INTERVAL 1 DAY) AS linhas_24h,\n",
+        "       COUNT_IF(status = 'falha' AND fim >= current_timestamp() - INTERVAL 7 DAYS) AS falhas_7d\n",
+        "FROM ctl.ctl_ingestao_log\n",
+        "GROUP BY entidade\n"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "gastos",
+      "displayName": "Gastos",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layout": [
+        {
+          "widget": {
+            "name": "titulo",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Compras públicas federais\n\nFonte: Compras.gov.br (PNCP/Lei 14.133 e Legado/Lei 8.666). Valor do item = homologado quando existe, senão estimado. Contratos ficam em tabela própria e não são somados aos itens."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_valor",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpis",
+                  "fields": [
+                    {
+                      "name": "sum(valor_total)",
+                      "expression": "SUM(`valor_total`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(valor_total)",
+                  "displayName": "Valor total (itens)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Valor total (itens)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_compras",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpis",
+                  "fields": [
+                    {
+                      "name": "sum(compras)",
+                      "expression": "SUM(`compras`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(compras)",
+                  "displayName": "Compras"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Compras"
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_itens",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpis",
+                  "fields": [
+                    {
+                      "name": "sum(itens)",
+                      "expression": "SUM(`itens`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(itens)",
+                  "displayName": "Itens"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Itens"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "evolucao",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "mensal",
+                  "fields": [
+                    {
+                      "name": "mes",
+                      "expression": "`mes`"
+                    },
+                    {
+                      "name": "sum(valor_total)",
+                      "expression": "SUM(`valor_total`)"
+                    },
+                    {
+                      "name": "regime_legal",
+                      "expression": "`regime_legal`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "mes",
+                  "scale": {
+                    "type": "temporal"
+                  },
+                  "displayName": "mes"
+                },
+                "y": {
+                  "fieldName": "sum(valor_total)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "valor_total"
+                },
+                "color": {
+                  "fieldName": "regime_legal",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "regime_legal"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Evolução mensal por regime legal"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "por_orgao",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "orgaos",
+                  "fields": [
+                    {
+                      "name": "orgao",
+                      "expression": "`orgao`"
+                    },
+                    {
+                      "name": "sum(valor_total)",
+                      "expression": "SUM(`valor_total`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "sum(valor_total)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "valor_total"
+                },
+                "y": {
+                  "fieldName": "orgao",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "orgao"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Órgãos com maior gasto"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 11,
+            "width": 3,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "por_modalidade",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "modalidades",
+                  "fields": [
+                    {
+                      "name": "grupo",
+                      "expression": "`grupo`"
+                    },
+                    {
+                      "name": "sum(valor_total)",
+                      "expression": "SUM(`valor_total`)"
+                    },
+                    {
+                      "name": "regime_legal",
+                      "expression": "`regime_legal`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "grupo",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "grupo"
+                },
+                "y": {
+                  "fieldName": "sum(valor_total)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "valor_total"
+                },
+                "color": {
+                  "fieldName": "regime_legal",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "regime_legal"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Volume por modalidade"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 11,
+            "width": 3,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "top_fornecedores",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "fornecedores",
+                  "fields": [
+                    {
+                      "name": "ni_fornecedor",
+                      "expression": "`ni_fornecedor`"
+                    },
+                    {
+                      "name": "razao_social",
+                      "expression": "`razao_social`"
+                    },
+                    {
+                      "name": "porte",
+                      "expression": "`porte`"
+                    },
+                    {
+                      "name": "contratos",
+                      "expression": "`contratos`"
+                    },
+                    {
+                      "name": "valor_global",
+                      "expression": "`valor_global`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "ni_fornecedor",
+                    "displayName": "ni_fornecedor"
+                  },
+                  {
+                    "fieldName": "razao_social",
+                    "displayName": "razao_social"
+                  },
+                  {
+                    "fieldName": "porte",
+                    "displayName": "porte"
+                  },
+                  {
+                    "fieldName": "contratos",
+                    "displayName": "contratos"
+                  },
+                  {
+                    "fieldName": "valor_global",
+                    "displayName": "valor_global"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Fornecedores com maior valor contratado"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 19,
+            "width": 6,
+            "height": 8
+          }
+        }
+      ]
+    },
+    {
+      "name": "qualidade",
+      "displayName": "Qualidade",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layout": [
+        {
+          "widget": {
+            "name": "titulo_dq",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Qualidade de dados\n\nRegras DQ-01 a DQ-18. Nada é descartado em silêncio: registros reprovados ficam na quarentena com motivo, regra e run."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "ingestao",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ingestao",
+                  "fields": [
+                    {
+                      "name": "entidade",
+                      "expression": "`entidade`"
+                    },
+                    {
+                      "name": "ultima_carga_ok",
+                      "expression": "`ultima_carga_ok`"
+                    },
+                    {
+                      "name": "linhas_24h",
+                      "expression": "`linhas_24h`"
+                    },
+                    {
+                      "name": "falhas_7d",
+                      "expression": "`falhas_7d`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "entidade",
+                    "displayName": "entidade"
+                  },
+                  {
+                    "fieldName": "ultima_carga_ok",
+                    "displayName": "ultima_carga_ok"
+                  },
+                  {
+                    "fieldName": "linhas_24h",
+                    "displayName": "linhas_24h"
+                  },
+                  {
+                    "fieldName": "falhas_7d",
+                    "displayName": "falhas_7d"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Atualidade da ingestão (DQ-16)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 3,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "quarentena",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "quarentena",
+                  "fields": [
+                    {
+                      "name": "regra",
+                      "expression": "`regra`"
+                    },
+                    {
+                      "name": "sum(registros)",
+                      "expression": "SUM(`registros`)"
+                    },
+                    {
+                      "name": "entidade",
+                      "expression": "`entidade`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "regra",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "regra"
+                },
+                "y": {
+                  "fieldName": "sum(registros)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "registros"
+                },
+                "color": {
+                  "fieldName": "entidade",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "entidade"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Quarentena aberta por regra"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 2,
+            "width": 3,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "resultados",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "dq",
+                  "fields": [
+                    {
+                      "name": "data_execucao",
+                      "expression": "`data_execucao`"
+                    },
+                    {
+                      "name": "regra",
+                      "expression": "`regra`"
+                    },
+                    {
+                      "name": "severidade",
+                      "expression": "`severidade`"
+                    },
+                    {
+                      "name": "entidade",
+                      "expression": "`entidade`"
+                    },
+                    {
+                      "name": "janela",
+                      "expression": "`janela`"
+                    },
+                    {
+                      "name": "linhas_avaliadas",
+                      "expression": "`linhas_avaliadas`"
+                    },
+                    {
+                      "name": "linhas_reprovadas",
+                      "expression": "`linhas_reprovadas`"
+                    },
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    },
+                    {
+                      "name": "detalhe",
+                      "expression": "`detalhe`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "data_execucao",
+                    "displayName": "data_execucao"
+                  },
+                  {
+                    "fieldName": "regra",
+                    "displayName": "regra"
+                  },
+                  {
+                    "fieldName": "severidade",
+                    "displayName": "severidade"
+                  },
+                  {
+                    "fieldName": "entidade",
+                    "displayName": "entidade"
+                  },
+                  {
+                    "fieldName": "janela",
+                    "displayName": "janela"
+                  },
+                  {
+                    "fieldName": "linhas_avaliadas",
+                    "displayName": "linhas_avaliadas"
+                  },
+                  {
+                    "fieldName": "linhas_reprovadas",
+                    "displayName": "linhas_reprovadas"
+                  },
+                  {
+                    "fieldName": "status",
+                    "displayName": "status"
+                  },
+                  {
+                    "fieldName": "detalhe",
+                    "displayName": "detalhe"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Resultados das regras (30 dias)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 7,
+            "width": 6,
+            "height": 10
+          }
+        }
+      ]
+    }
+  ]
+}

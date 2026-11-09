@@ -1,0 +1,33 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+.databricks/
+spark-warehouse/
+metastore_db/
+derby.log
+data/
+.env
+logs/
+
+# Segredos e credenciais
+.env.*
+.databrickscfg
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Sistema, editores e temporários
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+.coverage
+htmlcov/
+.ipynb_checkpoints/

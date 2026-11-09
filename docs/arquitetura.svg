@@ -1,0 +1,205 @@
+<svg viewBox="0 0 1300 690" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="titulo desc">
+  <title id="titulo">Arquitetura do Lakehouse de Compras Públicas Federais</title>
+  <desc id="desc">API Compras.gov.br alimenta um pipeline Ingestão → Landing → Bronze → Silver → Gold no Databricks, com quarentena de dados reprovados, dashboard e orquestração semanal via Asset Bundles e GitHub Actions.</desc>
+  <defs>
+    <style>
+      text { font-family: 'Segoe UI', Arial, sans-serif; fill: #0f172a; }
+    </style>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/>
+    </marker>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ca8a04"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1300" height="690" fill="#ffffff"/>
+
+  <!-- ===================== LEFT PANEL: FONTE ===================== -->
+  <rect x="20" y="20" width="220" height="620" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+  <text x="130" y="46" text-anchor="middle" font-size="12.5" font-weight="700" fill="#9a3412">FONTE DE DADOS</text>
+  <text x="130" y="62" text-anchor="middle" font-size="11" fill="#c2410c">(fora do lakehouse)</text>
+
+  <rect x="35" y="82" width="190" height="66" rx="6" fill="#ffffff" stroke="#ea580c" stroke-width="1.5"/>
+  <text x="130" y="108" text-anchor="middle" font-size="13" font-weight="700">API Compras.gov.br</text>
+  <text x="130" y="125" text-anchor="middle" font-size="9.5" fill="#4b5563">dadosabertos.compras.gov.br</text>
+  <text x="130" y="139" text-anchor="middle" font-size="9.5" fill="#4b5563">REST · paginado · Swagger</text>
+
+  <rect x="35" y="162" width="190" height="84" rx="6" fill="#ffffff" stroke="#ea580c" stroke-width="1.5"/>
+  <text x="130" y="184" text-anchor="middle" font-size="11.5" font-weight="700">PNCP — Lei 14.133</text>
+  <text x="130" y="198" text-anchor="middle" font-size="9.5" fill="#6b7280">(a partir de 2023)</text>
+  <line x1="45" y1="208" x2="215" y2="208" stroke="#fed7aa" stroke-width="1"/>
+  <text x="130" y="226" text-anchor="middle" font-size="11.5" font-weight="700">Legado — Lei 8.666</text>
+  <text x="130" y="240" text-anchor="middle" font-size="9.5" fill="#6b7280">(até ~2023)</text>
+
+  <rect x="35" y="258" width="190" height="46" rx="6" fill="#ffffff" stroke="#ea580c" stroke-width="1.5"/>
+  <text x="130" y="278" text-anchor="middle" font-size="11" font-weight="700">CSVs do portal (backfill)</text>
+  <text x="130" y="293" text-anchor="middle" font-size="9.5" fill="#6b7280">carga histórica manual</text>
+
+  <!-- único conector: fonte -> ingestão (centro) -->
+  <path d="M225,193 L255,193 L255,132 L278,132" fill="none" stroke="#ea580c" stroke-width="1.8" marker-end="url(#arrowOrange)"/>
+
+  <rect x="35" y="557" width="190" height="75" rx="6" fill="#ffffff" stroke="#9a3412" stroke-width="1.3" stroke-dasharray="4,3"/>
+  <text x="130" y="578" text-anchor="middle" font-size="10.5" font-weight="700">⚠️ Internet restrita</text>
+  <text x="130" y="592" text-anchor="middle" font-size="9.5" fill="#4b5563">(Free Edition)</text>
+  <text x="130" y="607" text-anchor="middle" font-size="9.5" fill="#4b5563">Alternativa: scripts/</text>
+  <text x="130" y="620" text-anchor="middle" font-size="9.5" fill="#4b5563">ingestao_semanal.ps1</text>
+
+  <!-- ===================== CENTER PANEL: DATABRICKS ===================== -->
+  <rect x="270" y="20" width="760" height="620" rx="10" fill="#eef4fc" stroke="#2563eb" stroke-width="2"/>
+
+  <!-- logo + wordmark Databricks (centralizado no painel) -->
+  <g transform="translate(578,26) scale(1.1667)" fill="#FF3621">
+    <path d="M.95 14.184L12 20.403l9.919-5.55v2.21L12 22.662l-10.484-5.96-.565.308v.77L12 24l11.05-6.218v-4.317l-.515-.309L12 19.118l-9.867-5.653v-2.21L12 16.805l11.05-6.218V6.32l-.515-.308L12 11.974 2.647 6.681 12 1.388l7.76 4.368.668-.411v-.566L12 0 .95 6.27v.72L12 13.207l9.919-5.55v2.26L12 15.52 1.516 9.56l-.565.308Z"/>
+  </g>
+  <text x="616" y="46" font-size="18" font-weight="700" fill="#1B3139">Databricks</text>
+
+  <!-- main flow boxes -->
+  <!-- Ingestão -->
+  <rect x="282" y="84" width="130" height="96" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="347" y="108" text-anchor="middle" font-size="12.5" font-weight="700">Ingestão</text>
+  <text x="347" y="126" text-anchor="middle" font-size="9" fill="#475569">paginação</text>
+  <text x="347" y="140" text-anchor="middle" font-size="9" fill="#475569">retry + watermark</text>
+  <text x="347" y="154" text-anchor="middle" font-size="9" fill="#475569">log em _controle/</text>
+
+  <!-- Landing -->
+  <rect x="430" y="84" width="130" height="96" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="495" y="108" text-anchor="middle" font-size="12.5" font-weight="700">Landing</text>
+  <text x="495" y="126" text-anchor="middle" font-size="9" fill="#475569">UC Volume</text>
+  <text x="495" y="140" text-anchor="middle" font-size="9" fill="#475569">JSON bruto</text>
+  <text x="495" y="154" text-anchor="middle" font-size="9" fill="#475569">entidade+janela+página</text>
+
+  <!-- Bronze -->
+  <rect x="578" y="84" width="130" height="96" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="643" y="108" text-anchor="middle" font-size="12.5" font-weight="700">Bronze</text>
+  <text x="643" y="126" text-anchor="middle" font-size="9" fill="#475569">1 tabela/entidade</text>
+  <text x="643" y="140" text-anchor="middle" font-size="9" fill="#475569">+ run_id</text>
+  <text x="643" y="154" text-anchor="middle" font-size="9" fill="#475569">espelha ctl_*</text>
+
+  <!-- Silver -->
+  <rect x="726" y="84" width="130" height="96" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="791" y="108" text-anchor="middle" font-size="12.5" font-weight="700">Silver</text>
+  <text x="791" y="126" text-anchor="middle" font-size="9" fill="#475569">tipada + dedup</text>
+  <text x="791" y="140" text-anchor="middle" font-size="9" fill="#475569">MERGE por chave</text>
+  <text x="791" y="154" text-anchor="middle" font-size="9" fill="#475569">schema único 14.133/8.666</text>
+
+  <!-- Gold -->
+  <rect x="874" y="84" width="130" height="96" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="939" y="108" text-anchor="middle" font-size="12.5" font-weight="700">Gold</text>
+  <text x="939" y="126" text-anchor="middle" font-size="9" fill="#475569">star schema</text>
+  <text x="939" y="140" text-anchor="middle" font-size="9" fill="#475569">SCD2 fornecedor</text>
+  <text x="939" y="154" text-anchor="middle" font-size="9" fill="#475569">_stg_* → replaceWhere</text>
+
+  <!-- arrows main flow -->
+  <line x1="412" y1="132" x2="428" y2="132" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrowBlue)"/>
+  <line x1="560" y1="132" x2="576" y2="132" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrowBlue)"/>
+  <line x1="708" y1="132" x2="724" y2="132" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrowBlue)"/>
+  <line x1="856" y1="132" x2="872" y2="132" stroke="#2563eb" stroke-width="1.8" marker-end="url(#arrowBlue)"/>
+
+  <!-- Quarentena -->
+  <rect x="560" y="212" width="300" height="72" rx="8" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+  <text x="710" y="236" text-anchor="middle" font-size="11.5" font-weight="700" fill="#713f12">quarentena_* / dq_resultados</text>
+  <text x="710" y="252" text-anchor="middle" font-size="9.5" fill="#713f12">registros reprovados, regra e motivo</text>
+  <text x="710" y="266" text-anchor="middle" font-size="9.5" fill="#713f12">(DQ-01 … DQ-18) · resolvido=true quando corrige</text>
+
+  <path d="M643,180 L643,212" fill="none" stroke="#ca8a04" stroke-width="1.6" marker-end="url(#arrowAmber)"/>
+  <text x="652" y="200" font-size="8.5" fill="#92400e">reprovados</text>
+  <path d="M791,180 L791,212" fill="none" stroke="#ca8a04" stroke-width="1.6" marker-end="url(#arrowAmber)"/>
+
+  <!-- Dashboard -->
+  <rect x="560" y="322" width="320" height="66" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="720" y="346" text-anchor="middle" font-size="12.5" font-weight="700">📊 Dashboard Databricks SQL</text>
+  <text x="720" y="362" text-anchor="middle" font-size="9.5" fill="#475569">Gastos · Qualidade (compras.lvdash.json)</text>
+  <text x="720" y="375" text-anchor="middle" font-size="9" fill="#475569">+ sql/alerta_qualidade.sql</text>
+
+  <path d="M710,284 L710,322" fill="none" stroke="#ca8a04" stroke-width="1.6" marker-end="url(#arrowAmber)"/>
+  <path d="M939,180 L939,304 L800,304 L800,322" fill="none" stroke="#2563eb" stroke-width="1.6" marker-end="url(#arrowBlue)"/>
+
+  <!-- Orchestration box -->
+  <rect x="282" y="412" width="720" height="170" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,4"/>
+  <text x="300" y="436" font-size="12.5" font-weight="700">⏱️ Job compras-semanal — toda segunda-feira às 06:00</text>
+
+  <!-- task chips -->
+  <g font-size="10" font-weight="600" fill="#1e3a8a">
+    <rect x="296" y="457" width="92" height="34" rx="17" fill="#eff6ff" stroke="#2563eb" stroke-width="1.2"/>
+    <text x="342" y="478" text-anchor="middle">planejar</text>
+
+    <rect x="396" y="457" width="92" height="34" rx="17" fill="#eff6ff" stroke="#2563eb" stroke-width="1.2"/>
+    <text x="442" y="478" text-anchor="middle">ingestão</text>
+
+    <rect x="496" y="457" width="92" height="34" rx="17" fill="#eff6ff" stroke="#2563eb" stroke-width="1.2"/>
+    <text x="542" y="478" text-anchor="middle">bronze</text>
+
+    <rect x="596" y="457" width="92" height="34" rx="17" fill="#eff6ff" stroke="#2563eb" stroke-width="1.2"/>
+    <text x="642" y="478" text-anchor="middle">silver</text>
+
+    <rect x="696" y="457" width="92" height="34" rx="17" fill="#eff6ff" stroke="#2563eb" stroke-width="1.2"/>
+    <text x="742" y="478" text-anchor="middle">gold</text>
+
+    <rect x="796" y="457" width="92" height="34" rx="17" fill="#eff6ff" stroke="#2563eb" stroke-width="1.2"/>
+    <text x="842" y="478" text-anchor="middle">qualidade</text>
+
+    <rect x="896" y="457" width="92" height="34" rx="17" fill="#eff6ff" stroke="#2563eb" stroke-width="1.2"/>
+    <text x="942" y="478" text-anchor="middle">otimizar</text>
+  </g>
+  <g stroke="#2563eb" stroke-width="1.4" marker-end="url(#arrowBlue)">
+    <line x1="388" y1="474" x2="394" y2="474"/>
+    <line x1="488" y1="474" x2="494" y2="474"/>
+    <line x1="588" y1="474" x2="594" y2="474"/>
+    <line x1="688" y1="474" x2="694" y2="474"/>
+    <line x1="788" y1="474" x2="794" y2="474"/>
+    <line x1="888" y1="474" x2="894" y2="474"/>
+  </g>
+
+  <text x="300" y="516" font-size="10.5" fill="#334155">run_id do job liga Bronze → Silver → Gold</text>
+  <text x="300" y="534" font-size="10.5" fill="#334155">Gold reconstrói só as partições ano_mes tocadas (+ antigas, se mudaram)</text>
+  <text x="300" y="552" font-size="10.5" fill="#334155">qualidade grava DQ-16/17 · otimizar faz OPTIMIZE + Z-ORDER + VACUUM</text>
+
+  <!-- ===================== RIGHT PANEL: DEPLOY ===================== -->
+  <rect x="1050" y="20" width="230" height="620" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+  <text x="1165" y="46" text-anchor="middle" font-size="12.5" font-weight="700" fill="#14532d">DEPLOY &amp; GOVERNANÇA</text>
+
+  <rect x="1065" y="72" width="200" height="64" rx="6" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="1165" y="96" text-anchor="middle" font-size="12" font-weight="700">Unity Catalog</text>
+  <text x="1165" y="112" text-anchor="middle" font-size="9.5" fill="#475569">catálogo · schema · tabela</text>
+  <text x="1165" y="125" text-anchor="middle" font-size="9.5" fill="#475569">via config.Settings</text>
+
+  <rect x="1065" y="152" width="200" height="64" rx="6" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="1165" y="176" text-anchor="middle" font-size="12" font-weight="700">Asset Bundles</text>
+  <text x="1165" y="192" text-anchor="middle" font-size="9.5" fill="#475569">databricks bundle deploy</text>
+  <text x="1165" y="205" text-anchor="middle" font-size="9.5" fill="#475569">-t dev / -t prod</text>
+
+  <rect x="1065" y="232" width="200" height="74" rx="6" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="1165" y="256" text-anchor="middle" font-size="12" font-weight="700">GitHub Actions</text>
+  <text x="1165" y="272" text-anchor="middle" font-size="9.5" fill="#475569">CI: lint · testes · Spark · build</text>
+  <text x="1165" y="285" text-anchor="middle" font-size="9.5" fill="#475569">dev no merge → prod na tag</text>
+  <text x="1165" y="298" text-anchor="middle" font-size="9" fill="#475569">(agendamento PAUSED em dev)</text>
+
+  <rect x="1065" y="322" width="200" height="64" rx="6" fill="#ffffff" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="1165" y="346" text-anchor="middle" font-size="12" font-weight="700">Alertas</text>
+  <text x="1165" y="362" text-anchor="middle" font-size="9.5" fill="#475569">e-mail em falha de task</text>
+  <text x="1165" y="375" text-anchor="middle" font-size="9.5" fill="#475569">2 retries por task</text>
+
+  <path d="M1065,269 L1035,269 L1035,412 L1004,412" fill="none" stroke="#16a34a" stroke-width="1.6" stroke-dasharray="5,3" marker-end="url(#arrowGreen)"/>
+  <text x="1012" y="407" text-anchor="end" font-size="8.5" fill="#14532d">deploy</text>
+
+  <!-- ===================== LEGEND ===================== -->
+  <g font-size="11" fill="#334155">
+    <line x1="40" y1="662" x2="80" y2="662" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowBlue)"/>
+    <text x="90" y="666">fluxo principal de dados</text>
+
+    <line x1="320" y1="662" x2="360" y2="662" stroke="#ca8a04" stroke-width="2" marker-end="url(#arrowAmber)"/>
+    <text x="370" y="666">dados reprovados / qualidade</text>
+
+    <line x1="640" y1="662" x2="680" y2="662" stroke="#16a34a" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#arrowGreen)"/>
+    <text x="690" y="666">deploy / orquestração (CI)</text>
+
+    <text x="1268" y="666" text-anchor="end" font-size="10" fill="#94a3b8" font-style="italic">docs/arquitetura.svg</text>
+  </g>
+</svg>

@@ -1,0 +1,44 @@
+name: CI
+
+# Em PRs; o push na main roda este mesmo workflow via deploy.yml (workflow_call).
+on:
+  pull_request:
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60  # a suíte Spark sobe Delta local em 6 cenários
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Dependências (com PySpark + Delta)
+        run: uv sync --extra spark
+
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Testes unitários
+        # -m na linha de comando substitui o addopts; "not live" precisa ser repetido
+        run: uv run pytest -m "not spark and not live" -v
+
+      - name: Testes Spark (Bronze → Silver → Gold em Delta local)
+        run: uv run pytest -m "spark and not live" -v
+
+      - name: Build do wheel
+        run: uv build --wheel

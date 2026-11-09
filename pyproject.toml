@@ -1,0 +1,54 @@
+[project]
+name = "compras"
+version = "0.1.0"
+description = "Lakehouse batch de compras públicas federais (Compras.gov.br) em Databricks/Delta"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "httpx>=0.27",
+    "tenacity>=8.2",
+    "databricks-sdk>=0.30",
+    "tzdata>=2024.1; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+spark = [
+    "pyspark>=3.5,<3.6",
+    "delta-spark>=3.3,<3.4",  # 3.2 quebra saveAsTable(overwrite) com pyspark 3.5.4+
+]
+
+[project.scripts]
+compras-ingest = "compras.ingestion.cli:main"
+compras-task = "compras.tasks.main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "respx>=0.21",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/compras"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # acentos em strings/comentários em pt-BR
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "spark: testes que precisam de PySpark + Delta + Java 17",
+    "live: testes que chamam a API real do Compras.gov.br (opt-in)",
+]
+addopts = "-m 'not live'"

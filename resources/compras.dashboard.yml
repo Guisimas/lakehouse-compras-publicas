@@ -1,0 +1,9 @@
+# Dashboard Lakeview (AI/BI). As consultas usam nomes de 2 níveis (gold.*, quality.*, ctl.*);
+# dataset_catalog aponta para o catálogo do ambiente.
+resources:
+  dashboards:
+    compras_dashboard:
+      display_name: "Compras Públicas Federais"
+      file_path: ./compras.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+      dataset_catalog: ${var.catalog}
