@@ -2,7 +2,8 @@
 
 Responsabilidades:
 - paginação por ``pagina``/``tamanhoPagina``, parando por ``totalPaginas``/``paginasRestantes``;
-- retry com backoff exponencial em 429, 5xx e erros de transporte, respeitando ``Retry-After``;
+- retry com backoff exponencial em 429, 5xx, 400 de instabilidade da API e erros de transporte,
+  respeitando ``Retry-After``;
 - limite de requisições por segundo;
 - início em qualquer página, para retomar um download interrompido.
 """
@@ -28,6 +29,10 @@ from tenacity import (
 log = logging.getLogger(__name__)
 
 STATUS_RETENTAVEIS = {408, 425, 429, 500, 502, 503, 504}
+
+# A API devolve 400 com este detalhe quando a falha é dela (instabilidade do backend): a mesma
+# requisição passa minutos depois. Erros de parâmetro de verdade têm outro texto.
+ERRO_400_INSTABILIDADE = "Erro ao efetuar a consulta"
 
 
 class ApiError(RuntimeError):
@@ -139,6 +144,8 @@ class ComprasClient:
     def _get_uma_vez(self, path: str, params: dict[str, Any]) -> tuple[Any, str]:
         self._limitador.aguardar()
         resp = self._http.get(path, params=params)
+        if resp.status_code == 400 and ERRO_400_INSTABILIDADE in resp.text:
+            raise ErroRetentavel(f"HTTP 400 (instabilidade) em {resp.request.url}", 400)
         if resp.status_code in STATUS_RETENTAVEIS:
             retry_after = resp.headers.get("Retry-After")
             raise ErroRetentavel(
