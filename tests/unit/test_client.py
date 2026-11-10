@@ -87,6 +87,21 @@ def test_erro_4xx_nao_tenta_de_novo(client):
 
 
 @respx.mock
+def test_400_de_instabilidade_da_api_tenta_de_novo(client):
+    corpo = {"title": "Requisição Inválida", "status": 400, "detail": "Erro ao efetuar a consulta "}
+    rota = respx.get(f"{BASE}{PATH}").mock(
+        side_effect=[
+            httpx.Response(400, json=corpo),
+            httpx.Response(400, json=corpo),
+            httpx.Response(200, json=_pagina(1, 1, 1)),
+        ]
+    )
+    paginas = list(client.paginas(PATH, {}))
+    assert len(paginas) == 1
+    assert rota.call_count == 3
+
+
+@respx.mock
 def test_endpoint_nao_paginado_e_booleans(client):
     rota = respx.get(f"{BASE}{PATH}").mock(
         return_value=httpx.Response(200, json={"resultado": {"id": 1}})
