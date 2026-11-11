@@ -25,7 +25,7 @@ from compras.ingestion.endpoints import (
     Modo,
     endpoints_da_entidade,
 )
-from compras.ingestion.landing import Landing, chave_janela, parse_nome_pagina
+from compras.ingestion.landing import Landing, chave_janela
 
 log = logging.getLogger(__name__)
 
@@ -127,11 +127,7 @@ class Ingestor:
             if sucesso is not None:
                 return ResultadoFanout(spec.nome, fanout, 0, 0, pulado=True)
 
-        existentes = self.landing.paginas_existentes(entidade, chave, spec.nome, fanout)
-        ultima = max(
-            (p[2] for f in existentes if (p := parse_nome_pagina(f.rsplit("/", 1)[-1]))),
-            default=0,
-        )
+        ultima = self.landing.ultima_pagina(entidade, chave, spec.nome, fanout)
         paginas = linhas = 0
         total_paginas = total_registros = None
         for pagina in self.client.paginas(

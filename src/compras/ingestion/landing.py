@@ -96,6 +96,24 @@ class Landing:
             if _basename(f).startswith(prefixo)
         ]
 
+    def ultima_pagina(self, entidade: str, chave: str, endpoint: str, fanout: str) -> int:
+        """Última página já gravada do fan-out (0 se nenhuma).
+
+        Só lista a pasta quando a página 1 existe (retomada). A pasta de uma varredura de
+        contratos tem milhares de arquivos, e listá-la num UC Volume a cada órgão custava ~30 s.
+        """
+        base = dir_janela(self.root, entidade, chave)
+        if not self.storage.exists(f"{base}/{nome_pagina(endpoint, fanout, 1)}"):
+            return 0
+        return max(
+            (
+                p[2]
+                for f in self.paginas_existentes(entidade, chave, endpoint, fanout)
+                if (p := parse_nome_pagina(_basename(f)))
+            ),
+            default=0,
+        )
+
     def limpar(self, entidade: str, chave: str, endpoint: str, fanout: str) -> None:
         for f in self.paginas_existentes(entidade, chave, endpoint, fanout):
             self.storage.delete(f)

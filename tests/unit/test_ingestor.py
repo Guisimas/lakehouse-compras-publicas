@@ -131,6 +131,26 @@ def test_retoma_da_ultima_pagina_depois_de_falha(ambiente):
 
 
 @respx.mock
+def test_fanout_novo_nao_lista_a_pasta_da_janela(ambiente):
+    # Num UC Volume, listar a pasta de uma varredura (milhares de arquivos) custa ~30 s.
+    landing, controle, client, _ = ambiente
+    listagens: list[str] = []
+    original = landing.storage.list_files
+
+    def list_files_contando(path):
+        listagens.append(path)
+        return original(path)
+
+    landing.storage.list_files = list_files_contando
+    respx.get(f"{BASE}/modulo-contratacoes/2_consultarItensContratacoes_PNCP_14133").mock(
+        side_effect=_paginado(2)
+    )
+    reg = _ingestor(landing, controle, client).ingerir("itens_compra", J)
+    assert reg.status == "sucesso" and reg.paginas == 2
+    assert not [p for p in listagens if "itens_compra/data_referencia=" in p]
+
+
+@respx.mock
 def test_contratos_fanout_por_orgao_do_snapshot(ambiente):
     landing, controle, client, _ = ambiente
     respx.get(f"{BASE}/modulo-uasg/1_consultarUasg").mock(
