@@ -12,9 +12,11 @@ Tipos de janela:
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from string import Formatter
 from typing import Any, Literal, Protocol
 
 TipoJanela = Literal["dia", "ano", "snapshot", "varredura"]
@@ -52,6 +54,25 @@ def _dia_seguinte(janela: date) -> date:
 DIAS_VARREDURA_CONTRATOS = 365
 
 
+# API do PNCP (fora do dadosabertos), usada só para completar o código do catálogo dos itens.
+PNCP_API = "https://pncp.gov.br/api/pncp"
+_ID_CONTRATACAO_PNCP = re.compile(r"^(?P<cnpj>\d{14})-\d+-(?P<seq>\d+)/(?P<ano>\d{4})$")
+
+
+def fanout_compra_pncp(id_contratacao: str) -> tuple[str, dict[str, Any]] | None:
+    """``10637926000146-1-000290/2026`` → (``10637926000146-2026-290``, parâmetros da URL).
+
+    O fan-out ``<cnpj>-<ano>-<sequencial>`` é a chave que a Silver usa para casar o item do
+    PNCP com o item do dadosabertos.
+    """
+    m = _ID_CONTRATACAO_PNCP.match(id_contratacao.strip())
+    if not m:
+        return None
+    seq = int(m["seq"])
+    params = {"cnpj": m["cnpj"], "ano": m["ano"], "sequencial": seq}
+    return f"{m['cnpj']}-{m['ano']}-{seq}", params
+
+
 def inicio_varredura(referencia: date, dias: int) -> date:
     """Primeiro dia de uma varredura de ``dias`` dias que termina em ``referencia``.
 
@@ -67,6 +88,7 @@ class FanoutContext(Protocol):
     def codigos_orgao(self) -> list[str]: ...
     def ids_compra_legado(self, janela: date) -> list[str]: ...
     def cnpjs_fornecedores(self, janela: date) -> list[str]: ...
+    def compras_pncp_sem_catalogo(self, janela: date) -> list[str]: ...
 
 
 ParamsFn = Callable[[date, FanoutContext | None], list[tuple[str, dict[str, Any]]]]
@@ -76,6 +98,8 @@ ParamsFn = Callable[[date, FanoutContext | None], list[tuple[str, dict[str, Any]
 class EndpointSpec:
     nome: str
     entidade: str
+    # Caminho relativo à API de Dados Abertos ou URL absoluta. Campos ``{nome}`` são
+    # preenchidos com os parâmetros de mesmo nome, que saem da query string.
     path: str
     sistema_origem: str
     params: ParamsFn
@@ -87,6 +111,16 @@ class EndpointSpec:
     refresh_dias: int = 7  # snapshot e varredura
     dias_varredura: int = 365  # só para varredura (limite da API de contratos)
     depende_de: tuple[str, ...] = field(default_factory=tuple)
+    vazio_em_404: bool = False  # 404 = nada a baixar (ex.: compra que saiu do PNCP)
+    # Complemento: falha nele não derruba a entidade; o fan-out fica sem _SUCCESS e é
+    # tentado de novo no próximo run.
+    opcional: bool = False
+
+    def requisicao(self, params: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+        """Separa os parâmetros do caminho (``{nome}``) dos da query string."""
+        campos = {n for _, n, _, _ in Formatter().parse(self.path) if n}
+        path = self.path.format(**{k: params[k] for k in campos})
+        return path, {k: v for k, v in params.items() if k not in campos}
 
 
 def _unico(params: dict[str, Any]) -> ParamsFn:
@@ -187,6 +221,23 @@ ENDPOINTS: tuple[EndpointSpec, ...] = (
         params=lambda j, _c: [
             ("all", {"dataInclusaoPncpInicial": j, "dataInclusaoPncpFinal": _dia_seguinte(j)})
         ],
+    ),
+    EndpointSpec(
+        nome="pncp_itens_catalogo",
+        entidade="itens_compra",
+        # Desde mai/2026 o endpoint acima manda codItemCatalogo, codigoPdm, codigoClasse e
+        # codigoGrupo vazios. A API do PNCP traz o código em catalogoCodigoItem; uma chamada
+        # por compra com item sem código. Se o dadosabertos voltar a mandar o código, o
+        # fan-out fica vazio sozinho.
+        path=f"{PNCP_API}/v1/orgaos/{{cnpj}}/compras/{{ano}}/{{sequencial}}/itens",
+        sistema_origem="pncp",
+        regime_legal="14133",
+        params=lambda j, c: [
+            f for i in _ctx(c).compras_pncp_sem_catalogo(j) if (f := fanout_compra_pncp(i))
+        ],
+        vazio_em_404=True,
+        opcional=True,
+        depende_de=("itens_compra",),
     ),
     EndpointSpec(
         nome="legado_itens_licitacao",

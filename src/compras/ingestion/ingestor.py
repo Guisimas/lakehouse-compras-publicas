@@ -79,12 +79,28 @@ class Ingestor:
         t0 = time.monotonic()
         try:
             for spec in specs:
-                for r in self._ingerir_endpoint(spec, janela, forcar):
-                    reg.fanouts += 1
-                    reg.fanouts_pulados += int(r.pulado)
-                    reg.paginas += r.paginas
-                    reg.linhas += r.linhas
-                    reg.detalhes.append(r.__dict__)
+                try:
+                    for r in self._ingerir_endpoint(spec, janela, forcar):
+                        reg.fanouts += 1
+                        reg.fanouts_pulados += int(r.pulado)
+                        reg.paginas += r.paginas
+                        reg.linhas += r.linhas
+                        reg.detalhes.append(r.__dict__)
+                except Exception as exc:
+                    if not spec.opcional:
+                        raise
+                    # Complemento fora do ar não derruba a entidade: os fan-outs que
+                    # faltaram ficam sem _SUCCESS e voltam no próximo run.
+                    log.warning(
+                        "Complemento %s de %s/%s interrompido: %s",
+                        spec.nome,
+                        entidade,
+                        chave_log,
+                        exc,
+                    )
+                    reg.detalhes.append(
+                        {"endpoint": spec.nome, "aviso": f"{type(exc).__name__}: {exc}"[:500]}
+                    )
             reg.status = "sucesso"
         except Exception as exc:  # o log precisa existir mesmo na falha
             reg.status = "falha"
@@ -95,7 +111,7 @@ class Ingestor:
             reg.duracao_s = round(time.monotonic() - t0, 3)
             # detalhes por fan-out só quando cabem; contratos tem centenas de órgãos
             if len(reg.detalhes) > 200:
-                reg.detalhes = [d for d in reg.detalhes if not d["pulado"]][:200]
+                reg.detalhes = [d for d in reg.detalhes if not d.get("pulado")][:200]
             self.controle.gravar_log(reg)
         if reg.status == "sucesso":
             self.controle.atualizar_watermark(entidade, janela, self.run_id, agora_utc())
@@ -128,14 +144,16 @@ class Ingestor:
                 return ResultadoFanout(spec.nome, fanout, 0, 0, pulado=True)
 
         ultima = self.landing.ultima_pagina(entidade, chave, spec.nome, fanout)
+        path, query = spec.requisicao(params)
         paginas = linhas = 0
         total_paginas = total_registros = None
         for pagina in self.client.paginas(
-            spec.path,
-            params,
+            path,
+            query,
             paginado=spec.paginado,
             aceita_tamanho_pagina=spec.aceita_tamanho_pagina,
             pagina_inicial=ultima + 1,
+            vazio_em_404=spec.vazio_em_404,
         ):
             total_paginas, total_registros = pagina.total_paginas, pagina.total_registros
             # Página vazia depois da primeira = já tínhamos tudo (run anterior caiu antes
@@ -146,7 +164,7 @@ class Ingestor:
                 "meta": {
                     "endpoint": spec.nome,
                     "entidade": entidade,
-                    "path": spec.path,
+                    "path": path,
                     "fanout": fanout,
                     "params": {k: str(v) for k, v in params.items()},
                     "pagina": pagina.numero,

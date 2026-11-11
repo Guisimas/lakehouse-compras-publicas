@@ -331,6 +331,26 @@ def fornecedor(porte: str) -> list[dict]:
     ]
 
 
+# Item do PNCP com o código do catálogo vazio (como vem desde mai/2026) e o complemento da
+# API do PNCP, que traz o código por compra.
+ID_CONTRATACAO_PNCP = "00394445000101-1-000012/2026"
+FANOUT_COMPRA_PNCP = "00394445000101-2026-12"
+PNCP_ITEM_SEM_CODIGO = [
+    {
+        **_pncp_item(f"{COMPRA_PREGAO}-5", COMPRA_PREGAO, "153080", "M", None, 10, 5.0, 50.0),
+        "idContratacaoPNCP": ID_CONTRATACAO_PNCP,
+        "numeroItemPncp": 5,
+    }
+]
+PNCP_ITENS_CATALOGO = [
+    {"numeroItem": 4, "materialOuServico": "M", "catalogoCodigoItem": "999999"},
+    {"numeroItem": 5, "materialOuServico": "M", "catalogoCodigoItem": "150000"},
+]
+JANELA_1_CATALOGO_PNCP = [
+    ("itens_compra", "2026-10-01", "pncp_itens", "sem-codigo", PNCP_ITEM_SEM_CODIGO),
+    ("itens_compra", "2026-10-01", "pncp_itens_catalogo", FANOUT_COMPRA_PNCP, PNCP_ITENS_CATALOGO),
+]
+
 # (entidade, chave_janela, endpoint, fanout, registros)
 JANELA_1 = [
     ("orgaos", "2026-10-01", "uasg", "all", UASG),

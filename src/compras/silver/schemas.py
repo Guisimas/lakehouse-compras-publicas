@@ -275,6 +275,8 @@ ITENS_COMPRA = EntidadeSilver(
         "pncp_itens": ("idCompraItem", "idCompra", "quantidade"),
         "legado_itens_licitacao": ("id_compra_item", "id_compra", "quantidade"),
         "legado_itens_sem_licitacao": ("id_compra_item", "id_compra"),
+        # complemento: não vira linha, só completa o código do catálogo (transform.py)
+        "pncp_itens_catalogo": ("numeroItem",),
     },
     prioridade={
         "pncp_itens": 0,
