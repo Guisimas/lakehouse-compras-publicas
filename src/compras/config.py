@@ -39,6 +39,9 @@ class Settings:
     max_pct_rejeitados: float = 0.02  # DQ-18
     freshness_horas: int = 24  # DQ-16
     tolerancia_valor: float = 0.01  # DQ-14
+    # DQ-04: acima disso o valor é erro de digitação na fonte (ex.: empenho de laboratório
+    # publicado com R$ 2,8 trilhões), e o registro vai para a quarentena.
+    valor_maximo: int = 50_000_000_000
 
     @property
     def landing(self) -> str:

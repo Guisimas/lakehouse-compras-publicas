@@ -92,25 +92,10 @@ def construir_dim_data(
 
 
 # ------------------------------------------------------------------ dim_modalidade
-_GRUPO_14133 = {
-    1: "Leilão",
-    2: "Diálogo competitivo",
-    3: "Concurso",
-    4: "Concorrência",
-    5: "Concorrência",
-    6: "Pregão",
-    7: "Pregão",
-    8: "Dispensa",
-    9: "Inexigibilidade",
-    10: "Manifestação de interesse",
-    11: "Pré-qualificação",
-    12: "Credenciamento",
-    13: "Leilão",
-    14: "Inaplicabilidade",
-}
-# Códigos do SIASG (Lei 8.666/RDC). Conferir com os nomes que a própria fonte devolve:
-# quando a Silver traz nome_modalidade, ele prevalece sobre este seed.
-_MODALIDADES_8666 = {
+# Códigos de modalidade do SIASG: (nome, grupo). A API usa esta tabela nas duas leis (Legado,
+# contratações 14.133 e módulo Contratos). Quando a Silver traz nome_modalidade, ele
+# prevalece sobre o nome do seed; o grupo vem sempre daqui.
+_MODALIDADES_SIASG = {
     1: ("Convite", "Convite"),
     2: ("Tomada de Preços", "Tomada de preços"),
     3: ("Concorrência", "Concorrência"),
@@ -125,6 +110,13 @@ _MODALIDADES_8666 = {
     99: ("RDC", "RDC"),
 }
 SEM_DISPUTA = {"Dispensa", "Inexigibilidade", "Inaplicabilidade"}
+# Contratos sem licitação correspondente não informam o regime legal ("indefinido"), mas o
+# código é o mesmo do SIASG, então o grupo continua conhecido.
+_REGIMES_SEED = {
+    "14133": MODALIDADES_14133,
+    "8666": _MODALIDADES_SIASG,
+    "indefinido": _MODALIDADES_SIASG,
+}
 
 SCHEMA_MODALIDADE = StructType(
     [
@@ -140,13 +132,13 @@ SCHEMA_MODALIDADE = StructType(
 
 
 def _seed_modalidades(spark: SparkSession) -> DataFrame:
-    linhas = [
-        (f"14133:{c}", "14133", str(c), n, _GRUPO_14133[c], _GRUPO_14133[c] in SEM_DISPUTA, "seed")
-        for c, n in MODALIDADES_14133.items()
-    ] + [
-        (f"8666:{c}", "8666", str(c), n, g, g in SEM_DISPUTA, "seed")
-        for c, (n, g) in _MODALIDADES_8666.items()
-    ]
+    linhas = []
+    for regime, codigos in _REGIMES_SEED.items():
+        for c in codigos:
+            nome, grupo = _MODALIDADES_SIASG[c]
+            linhas.append(
+                (f"{regime}:{c}", regime, str(c), nome, grupo, grupo in SEM_DISPUTA, "seed")
+            )
     return spark.createDataFrame(linhas, SCHEMA_MODALIDADE)
 
 

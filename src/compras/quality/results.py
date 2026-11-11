@@ -42,7 +42,9 @@ CATALOGO: dict[str, RegraInfo] = {
         RegraInfo("DQ-01", "validade", Severidade.CRITICA, "Schema com colunas esperadas"),
         RegraInfo("DQ-02", "completude", Severidade.QUARENTENA, "Campos obrigatórios não nulos"),
         RegraInfo("DQ-03", "validade", Severidade.QUARENTENA, "CNPJ com 14 dígitos e DV válido"),
-        RegraInfo("DQ-04", "validade", Severidade.QUARENTENA, "Valores numéricos e ≥ 0"),
+        RegraInfo(
+            "DQ-04", "validade", Severidade.QUARENTENA, "Valores numéricos, ≥ 0 e até o teto"
+        ),
         RegraInfo("DQ-05", "validade", Severidade.QUARENTENA, "Quantidade do item > 0"),
         RegraInfo("DQ-06", "validade", Severidade.QUARENTENA, "Data válida e não futura"),
         RegraInfo("DQ-07", "validade", Severidade.QUARENTENA, "Fim da vigência ≥ início"),

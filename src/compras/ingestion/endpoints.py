@@ -22,22 +22,15 @@ from typing import Any, Literal, Protocol
 TipoJanela = Literal["dia", "ano", "snapshot", "varredura"]
 Modo = Literal["incremental", "historico"]
 
-# Modalidades da Lei 14.133 no PNCP (codigoModalidade). O endpoint exige uma por chamada.
+# Modalidades da Lei 14.133 no endpoint de contratações (codigoModalidade). O endpoint exige
+# uma por chamada. Os códigos seguem a tabela do SIASG, e não a do portal do PNCP: conferido na
+# API real em 2026-11-11, consultando os códigos 1 a 24, 33, 44 e 99 em 12 meses
+# (nov/2025 a out/2026), só estes quatro devolvem registros.
 MODALIDADES_14133 = {
-    1: "Leilão - Eletrônico",
-    2: "Diálogo Competitivo",
-    3: "Concurso",
-    4: "Concorrência - Eletrônica",
-    5: "Concorrência - Presencial",
-    6: "Pregão - Eletrônico",
-    7: "Pregão - Presencial",
-    8: "Dispensa de Licitação",
-    9: "Inexigibilidade",
-    10: "Manifestação de Interesse",
-    11: "Pré-qualificação",
-    12: "Credenciamento",
-    13: "Leilão - Presencial",
-    14: "Inaplicabilidade da Licitação",
+    3: "Concorrência",
+    5: "Pregão",
+    6: "Dispensa",
+    7: "Inexigibilidade",
 }
 
 

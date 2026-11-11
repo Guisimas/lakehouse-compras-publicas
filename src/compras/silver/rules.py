@@ -36,7 +36,7 @@ def _invalido(df: DataFrame, nome: str) -> Column:
     return F.trim(raw).isNotNull() & (F.trim(raw) != "") & F.col(nome).isNull()
 
 
-def regras_da_entidade(ent: EntidadeSilver) -> list[RegraLinha]:
+def regras_da_entidade(ent: EntidadeSilver, valor_maximo: int) -> list[RegraLinha]:
     regras: list[RegraLinha] = []
     tipos = {c.nome: c.tipo for c in ent.colunas}
 
@@ -60,8 +60,10 @@ def regras_da_entidade(ent: EntidadeSilver) -> list[RegraLinha]:
         regras.append(
             RegraLinha(
                 "DQ-04",
-                f"{nome} negativo ou não numérico",
-                lambda df, n=nome: (F.col(n) < 0) | _invalido(df, n),
+                f"{nome} negativo, não numérico ou acima de R$ {valor_maximo:,}".replace(",", "."),
+                lambda df, n=nome: (
+                    (F.col(n) < 0) | (F.col(n) > F.lit(valor_maximo)) | _invalido(df, n)
+                ),
             )
         )
     for nome, tipo in tipos.items():

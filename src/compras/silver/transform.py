@@ -520,7 +520,7 @@ def processar_entidade(
     tipado = tipar(mapeado, ent).withColumn("chave_registro", _chave_registro(ent))
 
     # 3. regras linha a linha
-    regras = regras_da_entidade(ent)
+    regras = regras_da_entidade(ent, settings.valor_maximo)
     avaliado = materializar(
         spark,
         settings.tabela("silver", f"_stg_{entidade}"),

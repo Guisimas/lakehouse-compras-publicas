@@ -208,7 +208,7 @@ Nenhum dado inválido é descartado em silêncio. Cada regra tem uma de três se
 | DQ-01 | As colunas de origem esperadas existem e vêm preenchidas em cada endpoint | Bronze → Silver | Crítica |
 | DQ-02 | Campos obrigatórios (chave e data do evento) não nulos | Bronze → Silver | Quarentena |
 | DQ-03 | CNPJ com 14 dígitos e dígito verificador válido (fornecedor estrangeiro passa, com `sk_fornecedor = -1`) | Bronze → Silver | Quarentena |
-| DQ-04 | Valores numéricos e maiores ou iguais a zero | Bronze → Silver | Quarentena |
+| DQ-04 | Valores numéricos, maiores ou iguais a zero e até R$ 50 bilhões (acima disso é erro de digitação na fonte) | Bronze → Silver | Quarentena |
 | DQ-05 | Quantidade do item maior que zero | Bronze → Silver | Quarentena |
 | DQ-06 | Data válida e, para datas de evento, não futura | Bronze → Silver | Quarentena |
 | DQ-07 | Fim da vigência do contrato maior ou igual ao início | Bronze → Silver | Quarentena |

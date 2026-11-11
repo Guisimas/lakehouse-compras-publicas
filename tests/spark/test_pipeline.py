@@ -105,8 +105,12 @@ def test_ponta_a_ponta(spark, ambiente):
 
     # ---------------- Silver + quarentena
     assert spark.table(s.silver("licitacoes")).count() == 3
-    q_lic = {tuple(r.regra_violada) for r in spark.table(s.quarentena("licitacoes")).collect()}
-    assert q_lic == {("DQ-02",), ("DQ-04",)}
+    q_lic = {
+        r.chave_registro: tuple(r.regra_violada)
+        for r in spark.table(s.quarentena("licitacoes")).collect()
+    }
+    assert set(q_lic.values()) == {("DQ-02",), ("DQ-04",)}
+    assert q_lic["20000508000993026"] == ("DQ-04",)  # acima do teto de R$ 50 bi
 
     itens = {r.id_compra_item: r for r in spark.table(s.silver("itens_compra")).collect()}
     assert set(itens) == {
@@ -160,7 +164,11 @@ def test_ponta_a_ponta(spark, ambiente):
     assert estrangeiro.sk_fornecedor == -1 and estrangeiro.valor_total_item == Decimal("100.00")
 
     mod = spark.table(s.gold("dim_modalidade")).where(F.col("sk_modalidade") == linha.sk_modalidade)
-    assert mod.first().modalidade_chave == "14133:6"
+    assert (mod.first().modalidade_chave, mod.first().grupo) == ("14133:5", "Pregão")
+    dispensa = (
+        spark.table(s.gold("dim_modalidade")).where(F.col("modalidade_chave") == "14133:6").first()
+    )
+    assert dispensa.grupo == "Dispensa" and dispensa.sem_licitacao is True
 
     fct = spark.table(s.gold("fato_contratos")).first()
     assert fct.valor_global == Decimal("900.00") and fct.prazo_dias == 364
@@ -240,7 +248,7 @@ def test_quarentena_resolvida_quando_registro_chega_corrigido(spark, ambiente):
     escrever_landing(s, api.JANELA_1)
     rodar(spark, s, "run-1")
     # a compra que faltava chega: o item órfão deixa a quarentena e entra na fato
-    nova = api._pncp_compra("99999999999999999", "153080", 6, "Pregão - Eletrônico", 6.0, None)
+    nova = api._pncp_compra("99999999999999999", "153080", 5, "Pregão - Eletrônico", 6.0, None)
     escrever_landing(
         s,
         [
@@ -248,8 +256,8 @@ def test_quarentena_resolvida_quando_registro_chega_corrigido(spark, ambiente):
                 "licitacoes",
                 "2026-10-01",
                 "pncp_contratacoes",
-                "mod06",
-                [*api.PNCP_CONTRATACOES_MOD06, nova],
+                "mod05",
+                [*api.PNCP_CONTRATACOES_MOD05, nova],
             )
         ],
     )
