@@ -223,7 +223,8 @@ def test_registro_de_endpoints_consistente():
     assert len(nomes) == len(set(nomes))
     pncp = next(e for e in ENDPOINTS if e.nome == "pncp_contratacoes")
     params = pncp.params(J, None)
-    assert len(params) == 14 and params[5][1]["codigoModalidade"] == 6
+    assert [p["codigoModalidade"] for _, p in params] == [3, 5, 6, 7]  # códigos do SIASG
+    assert [f for f, _ in params] == ["mod03", "mod05", "mod06", "mod07"]
     legado = next(e for e in ENDPOINTS if e.nome == "legado_licitacoes")
     assert legado.params(J, None)[0][1]["pertence14133"] is False
     # endpoints anuais do Legado ficam fora do modo diário

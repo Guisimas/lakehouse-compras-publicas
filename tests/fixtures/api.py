@@ -116,13 +116,16 @@ def _pncp_compra(id_compra, uasg, mod, nome, est, hom, **extra):
     return base
 
 
-PNCP_CONTRATACOES_MOD06 = [
-    _pncp_compra(COMPRA_PREGAO, "153080", 6, "Pregão - Eletrônico", 1000.0, 900.0),
-    _pncp_compra(None, "153080", 6, "Pregão - Eletrônico", 10.0, None),  # DQ-02
+# Códigos do SIASG, como a API devolve: 5 = Pregão, 6 = Dispensa.
+PNCP_CONTRATACOES_MOD05 = [
+    _pncp_compra(COMPRA_PREGAO, "153080", 5, "Pregão - Eletrônico", 1000.0, 900.0),
+    _pncp_compra(None, "153080", 5, "Pregão - Eletrônico", 10.0, None),  # DQ-02
 ]
-PNCP_CONTRATACOES_MOD08 = [
-    _pncp_compra(COMPRA_DISPENSA, "200005", 8, "Dispensa de Licitação", 500.0, None),
-    _pncp_compra("20000508000992026", "200005", 8, "Dispensa de Licitação", -5.0, None),  # DQ-04
+PNCP_CONTRATACOES_MOD06 = [
+    _pncp_compra(COMPRA_DISPENSA, "200005", 6, "Dispensa", 500.0, None),
+    _pncp_compra("20000508000992026", "200005", 6, "Dispensa", -5.0, None),  # DQ-04
+    # DQ-04 (teto): erro de digitação na fonte, como o empenho real de R$ 2,8 trilhões
+    _pncp_compra("20000508000993026", "200005", 6, "Dispensa", 2809000641300.01, None),
 ]
 LEGADO_LICITACOES = [
     {
@@ -281,7 +284,7 @@ CONTRATOS = [
         "niFornecedor": CNPJ_OK,
         "nomeRazaoSocialFornecedor": "PAPELARIA EXEMPLO LTDA",
         "objeto": "Papel",
-        "codigoModalidadeCompra": "06",
+        "codigoModalidadeCompra": "05",
         "nomeModalidadeCompra": "Pregão",
         "dataVigenciaInicial": "2026-10-01",
         "dataVigenciaFinal": "2027-09-30",
@@ -357,8 +360,8 @@ JANELA_1 = [
     ("orgaos", "2026-10-01", "orgao", "all", ORGAO),
     ("catalogo", "2026-10-01", "catmat", "all", CATMAT),
     ("catalogo", "2026-10-01", "catser", "all", CATSER),
+    ("licitacoes", "2026-10-01", "pncp_contratacoes", "mod05", PNCP_CONTRATACOES_MOD05),
     ("licitacoes", "2026-10-01", "pncp_contratacoes", "mod06", PNCP_CONTRATACOES_MOD06),
-    ("licitacoes", "2026-10-01", "pncp_contratacoes", "mod08", PNCP_CONTRATACOES_MOD08),
     ("licitacoes", "2026-10-01", "legado_licitacoes", "all", LEGADO_LICITACOES),
     ("itens_compra", "2026-10-01", "pncp_itens", "all", PNCP_ITENS),
     ("itens_compra", "2026-10-01", "legado_itens_licitacao", f"id{COMPRA_LEGADO}", LEGADO_ITENS),

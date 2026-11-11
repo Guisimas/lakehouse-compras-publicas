@@ -70,7 +70,7 @@ Colunas técnicas em toda tabela Silver:
 | `dim_fornecedor` | `ni_fornecedor` | **SCD2** | atributos do cadastro, `situacao`, `origem_cadastro` (cadastro/inferido), `hash_atributos`, `data_inicio_vigencia`, `data_fim_vigencia` (9999-12-31 = atual), `registro_atual` |
 | `dim_orgao` | `codigo_uasg` | SCD1 | UASG, UF, município, órgão, órgão superior, esfera, poder, tipo de administração |
 | `dim_item` | `item_chave` (`M:123`) | SCD1 | tipo, código, descrição, grupo, classe, subclasse/PDM |
-| `dim_modalidade` | `modalidade_chave` (`14133:6`) | SCD1 | regime, código, nome, grupo, `sem_licitacao`, origem (seed/observada) |
+| `dim_modalidade` | `modalidade_chave` (`14133:5`; códigos do SIASG nas duas leis) | SCD1 | regime, código, nome, grupo, `sem_licitacao`, origem (seed/observada) |
 
 ## Controle e qualidade
 

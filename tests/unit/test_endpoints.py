@@ -11,7 +11,7 @@ D = date(2026, 11, 4)
 
 def test_pncp_contratacoes_usa_fim_exclusivo():
     fanouts = endpoint("pncp_contratacoes").params(D, None)
-    assert len(fanouts) == 14
+    assert len(fanouts) == 4
     for _, p in fanouts:
         assert p["dataPublicacaoPncpInicial"] == D
         assert p["dataPublicacaoPncpFinal"] == date(2026, 11, 5)

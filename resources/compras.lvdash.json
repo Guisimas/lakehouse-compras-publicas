@@ -4,19 +4,20 @@
       "name": "kpis",
       "displayName": "KPIs",
       "queryLines": [
-        "SELECT COUNT(DISTINCT id_compra) AS compras, COUNT(*) AS itens, SUM(valor_total_item) AS valor_total\n",
-        "FROM gold.fato_compras\n",
-        "WHERE NOT compra_excluida\n"
+        "SELECT COUNT(DISTINCT f.id_compra) AS compras, COUNT(*) AS itens, SUM(f.valor_total_item) AS valor_total\n",
+        "FROM gold.fato_compras f\n",
+        "JOIN gold.dim_orgao o ON o.sk_orgao = f.sk_orgao\n",
+        "WHERE NOT f.compra_excluida AND o.esfera = 'Federal'\n"
       ]
     },
     {
       "name": "orgaos",
       "displayName": "Gasto por órgão",
       "queryLines": [
-        "SELECT o.nome_orgao_superior AS orgao, SUM(f.valor_total_item) AS valor_total\n",
+        "SELECT coalesce(o.nome_orgao, o.nome_uasg) AS orgao, SUM(f.valor_total_item) AS valor_total\n",
         "FROM gold.fato_compras f\n",
         "JOIN gold.dim_orgao o ON o.sk_orgao = f.sk_orgao\n",
-        "WHERE NOT f.compra_excluida\n",
+        "WHERE NOT f.compra_excluida AND o.esfera = 'Federal'\n",
         "GROUP BY 1\n",
         "ORDER BY 2 DESC\n",
         "LIMIT 15\n"
@@ -32,7 +33,8 @@
         "FROM gold.fato_compras f\n",
         "JOIN gold.dim_data d ON d.sk_data = f.sk_data_publicacao\n",
         "JOIN gold.dim_modalidade m ON m.sk_modalidade = f.sk_modalidade\n",
-        "WHERE NOT f.compra_excluida\n",
+        "JOIN gold.dim_orgao o ON o.sk_orgao = f.sk_orgao\n",
+        "WHERE NOT f.compra_excluida AND o.esfera = 'Federal'\n",
         "GROUP BY ALL\n"
       ]
     },
@@ -43,7 +45,8 @@
         "SELECT m.grupo, m.regime_legal, SUM(f.valor_total_item) AS valor_total\n",
         "FROM gold.fato_compras f\n",
         "JOIN gold.dim_modalidade m ON m.sk_modalidade = f.sk_modalidade\n",
-        "WHERE NOT f.compra_excluida\n",
+        "JOIN gold.dim_orgao o ON o.sk_orgao = f.sk_orgao\n",
+        "WHERE NOT f.compra_excluida AND o.esfera = 'Federal'\n",
         "GROUP BY ALL\n"
       ]
     },
@@ -113,7 +116,7 @@
             "name": "titulo",
             "multilineTextboxSpec": {
               "lines": [
-                "# Compras públicas federais\n\nFonte: Compras.gov.br (PNCP/Lei 14.133 e Legado/Lei 8.666). Valor do item = homologado quando existe, senão estimado. Contratos ficam em tabela própria e não são somados aos itens."
+                "# Compras públicas federais\n\nFonte: Compras.gov.br (PNCP/Lei 14.133 e Legado/Lei 8.666). Só órgãos da esfera federal: o PNCP também publica compras de estados e municípios, que ficam na Gold mas fora deste painel. Valor do item = homologado quando existe, senão estimado. Contratos ficam em tabela própria e não são somados aos itens."
               ]
             }
           },
