@@ -26,7 +26,7 @@ Colunas originais da API, todas como string e com os nomes da fonte, mais:
 | Entidade | Chave natural | Partição | Destaques |
 | --- | --- | --- | --- |
 | `licitacoes` | `id_compra` | `ano_mes` (publicação) | `regime_legal`, `codigo_uasg` (6 dígitos), `codigo_modalidade`, valores estimado/homologado `decimal(18,2)`, `excluido` |
-| `itens_compra` | `id_compra_item` | `ano_mes` (data do item) | `tipo_item` M/S, `codigo_item_catalogo`, quantidade e unitário `decimal(18,4)`, totais `decimal(18,2)`, `ni_fornecedor` (CNPJ ou CPF mascarado), `tipo_pessoa` |
+| `itens_compra` | `id_compra_item` | `ano_mes` (data do item) | `tipo_item` M/S, `codigo_item_catalogo` (quando a fonte manda vazio, vem da API do PNCP), quantidade e unitário `decimal(18,4)`, totais `decimal(18,2)`, `ni_fornecedor` (CNPJ ou CPF mascarado), `tipo_pessoa` |
 | `contratos` | `id_contrato` (nº de controle PNCP, ou unidade-tipo-número) | `ano_mes` (início da vigência) | vigência, valor global/parcela/acumulado, `ni_fornecedor` |
 | `fornecedores` | `ni_fornecedor` | — | razão social, porte, natureza jurídica, UF, município, CNAE, ativo, habilitado |
 | `orgaos` | `codigo_uasg` | — | UASG + órgão + órgão superior, esfera, poder |

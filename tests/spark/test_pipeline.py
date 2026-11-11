@@ -172,6 +172,26 @@ def test_ponta_a_ponta(spark, ambiente):
     assert ("DQ-09", "ok") in dq and ("DQ-03", "quarentena") in dq
 
 
+def test_codigo_do_catalogo_completado_pela_api_do_pncp(spark, ambiente):
+    escrever_landing(ambiente, api.JANELA_1 + api.JANELA_1_CATALOGO_PNCP)
+    rodar(spark, ambiente, "run-1")
+    s = ambiente
+
+    itens = {r.id_compra_item: r for r in spark.table(s.silver("itens_compra")).collect()}
+    assert itens[f"{api.COMPRA_PREGAO}-5"].codigo_item_catalogo == "150000"
+    # o código da fonte principal não é trocado pelo complemento
+    assert itens[f"{api.COMPRA_PREGAO}-1"].codigo_item_catalogo == "150000"
+    # o complemento não vira linha de item
+    assert len(itens) == 6
+
+    linha = (
+        spark.table(s.gold("fato_compras"))
+        .where(F.col("id_compra_item") == f"{api.COMPRA_PREGAO}-5")
+        .first()
+    )
+    assert linha.sk_item != -1
+
+
 def test_reexecucao_e_idempotente(spark, ambiente):
     escrever_landing(ambiente, api.JANELA_1)
     rodar(spark, ambiente, "run-1")

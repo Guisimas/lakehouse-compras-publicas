@@ -1,7 +1,8 @@
 """Cliente HTTP da API de Dados Abertos do Compras.gov.br.
 
 Responsabilidades:
-- paginação por ``pagina``/``tamanhoPagina``, parando por ``totalPaginas``/``paginasRestantes``;
+- paginação por ``pagina``/``tamanhoPagina``, parando por ``totalPaginas``/``paginasRestantes``
+  ou, quando a resposta é uma lista simples (API do PNCP), por página incompleta;
 - retry com backoff exponencial em 429, 5xx, 400 de instabilidade da API e erros de transporte,
   respeitando ``Retry-After``;
 - limite de requisições por segundo;
@@ -141,9 +142,11 @@ class ComprasClient:
             return exc.retry_after
         return self._espera_exp(estado)
 
-    def _get_uma_vez(self, path: str, params: dict[str, Any]) -> tuple[Any, str]:
+    def _get_uma_vez(
+        self, path: str, params: dict[str, Any], vazio_em_404: bool = False
+    ) -> tuple[Any, str]:
         self._limitador.aguardar()
-        resp = self._http.get(path, params=params)
+        resp = self._http.get(path, params=params)  # URL absoluta ignora o base_url
         if resp.status_code == 400 and ERRO_400_INSTABILIDADE in resp.text:
             raise ErroRetentavel(f"HTTP 400 (instabilidade) em {resp.request.url}", 400)
         if resp.status_code in STATUS_RETENTAVEIS:
@@ -153,7 +156,7 @@ class ComprasClient:
                 resp.status_code,
                 float(retry_after) if retry_after and retry_after.isdigit() else None,
             )
-        if resp.status_code == 204:
+        if resp.status_code == 204 or (resp.status_code == 404 and vazio_em_404):
             return {"resultado": [], "totalPaginas": 0, "totalRegistros": 0}, str(resp.url)
         if resp.status_code >= 400:
             raise ApiError(
@@ -165,7 +168,7 @@ class ComprasClient:
         except ValueError as exc:  # corpo truncado/HTML de erro: vale tentar de novo
             raise ErroRetentavel(f"JSON inválido em {resp.request.url}") from exc
 
-    def get(self, path: str, params: dict[str, Any]) -> tuple[Any, str]:
+    def get(self, path: str, params: dict[str, Any], vazio_em_404: bool = False) -> tuple[Any, str]:
         retrying = Retrying(
             stop=stop_after_attempt(self._max_tentativas),
             wait=self._espera,
@@ -178,7 +181,7 @@ class ComprasClient:
                 s.outcome.exception(),
             ),
         )
-        return retrying(self._get_uma_vez, path, params)
+        return retrying(self._get_uma_vez, path, params, vazio_em_404)
 
     # ------------------------------------------------------------------ paginação
     def paginas(
@@ -189,6 +192,7 @@ class ComprasClient:
         paginado: bool = True,
         aceita_tamanho_pagina: bool = True,
         pagina_inicial: int = 1,
+        vazio_em_404: bool = False,
     ) -> Iterator[Pagina]:
         """Itera as páginas a partir de ``pagina_inicial`` até a última."""
         numero = pagina_inicial
@@ -198,13 +202,21 @@ class ComprasClient:
                 p["pagina"] = numero
                 if aceita_tamanho_pagina:
                     p["tamanhoPagina"] = self.tamanho_pagina
-            payload, url = self.get(path, p)
+            payload, url = self.get(path, p, vazio_em_404)
             registros, total_paginas, total_registros, restantes = _extrair_registros(payload)
             if total_paginas is None and restantes is not None:
                 total_paginas = numero + int(restantes)
             pagina = Pagina(numero, payload, registros, total_paginas, total_registros, url)
             yield pagina
             if not paginado or pagina.ultima or not registros:
+                return
+            # Lista simples, sem total: página menor que o pedido é a última (poupa uma
+            # chamada vazia por fan-out).
+            if (
+                isinstance(payload, list)
+                and aceita_tamanho_pagina
+                and len(registros) < self.tamanho_pagina
+            ):
                 return
             numero += 1
 

@@ -199,6 +199,17 @@ class LandingFanout:
         )
         return sorted({str(r["id_compra"]) for r in regs if r.get("id_compra")})
 
+    def compras_pncp_sem_catalogo(self, janela: date) -> list[str]:
+        """Compras do PNCP da janela com algum item sem código do catálogo."""
+        regs = self.landing.registros("itens_compra", janela.isoformat(), endpoint="pncp_itens")
+        return sorted(
+            {
+                str(r["idContratacaoPNCP"])
+                for r in regs
+                if r.get("idContratacaoPNCP") and not r.get("codItemCatalogo")
+            }
+        )
+
     def cnpjs_fornecedores(self, janela: date) -> list[str]:
         chave = janela.isoformat()
         candidatos: set[str] = set()

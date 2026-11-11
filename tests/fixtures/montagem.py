@@ -28,7 +28,10 @@ def escrever_landing(settings, linhas, run_id_ingestao="ing-teste"):
                 "data_referencia": chave,
                 "run_id": run_id_ingestao,
             },
-            "payload": {
+            # A API do PNCP responde com lista simples; a do dadosabertos, com envelope.
+            "payload": registros
+            if spec.path.startswith("http")
+            else {
                 "resultado": registros,
                 "totalPaginas": 1,
                 "totalRegistros": len(registros),

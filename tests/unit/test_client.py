@@ -122,3 +122,33 @@ def test_sem_tamanho_pagina_para_por_lista_vazia(client):
     respx.get(f"{BASE}{PATH}").mock(side_effect=resp)
     paginas = list(client.paginas(PATH, {}, aceita_tamanho_pagina=False))
     assert [p.numero for p in paginas] == [1, 2, 3]
+
+
+@respx.mock
+def test_lista_simples_para_na_pagina_incompleta():
+    c = ComprasClient(BASE, tamanho_pagina=10, req_por_segundo=0, sleep=lambda _s: None)
+    rota = respx.get(f"{BASE}{PATH}").mock(
+        side_effect=lambda req: httpx.Response(
+            200, json=[{"n": i} for i in range(10 if req.url.params["pagina"] == "1" else 3)]
+        )
+    )
+    paginas = list(c.paginas(PATH, {}))
+    c.close()
+    assert [len(p.registros) for p in paginas] == [10, 3]
+    assert rota.call_count == 2  # sem a chamada vazia da página 3
+
+
+@respx.mock
+def test_404_vira_vazio_quando_pedido(client):
+    respx.get(f"{BASE}{PATH}").mock(return_value=httpx.Response(404, json={"status": "404"}))
+    [pagina] = list(client.paginas(PATH, {}, vazio_em_404=True))
+    assert pagina.registros == []
+    with pytest.raises(ApiError):
+        list(client.paginas(PATH, {}))
+
+
+@respx.mock
+def test_url_absoluta_ignora_o_base_url(client):
+    rota = respx.get("https://outra.api/v1/x").mock(return_value=httpx.Response(200, json=[]))
+    list(client.paginas("https://outra.api/v1/x", {}))
+    assert rota.call_count == 1

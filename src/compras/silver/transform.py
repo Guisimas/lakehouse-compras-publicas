@@ -19,7 +19,7 @@ import logging
 from dataclasses import dataclass, field
 
 from delta.tables import DeltaTable
-from pyspark.sql import DataFrame, SparkSession, Window
+from pyspark.sql import Column, DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
 from pyspark.sql.types import (
     BooleanType,
@@ -406,6 +406,64 @@ def checar_unicidade(spark: SparkSession, settings: Settings, ent: EntidadeSilve
 
 
 # ------------------------------------------------------------------ orquestração
+_ID_CONTRATACAO_PNCP = r"^(\d{14})-\d+-(\d+)/(\d{4})$"
+
+
+def _compra_pncp(id_contratacao: Column) -> Column:
+    """``cnpj-1-seq/ano`` → ``cnpj-ano-seq``, o mesmo fan-out que a ingestão grava."""
+
+    def parte(n: int) -> Column:
+        return F.regexp_extract(id_contratacao, _ID_CONTRATACAO_PNCP, n)
+
+    return F.when(
+        id_contratacao.rlike(_ID_CONTRATACAO_PNCP),
+        F.concat_ws("-", parte(1), parte(3), exprs.inteiro(parte(2)).cast("string")),
+    )
+
+
+def _completar_catalogo_pncp(bronze: DataFrame, mapeado: DataFrame) -> DataFrame:
+    """Enriquecimento dentro da própria entidade: código do catálogo vindo da API do PNCP.
+
+    O endpoint de itens do dadosabertos manda o código vazio desde mai/2026. O complemento
+    ``pncp_itens_catalogo`` chega por compra (fan-out ``cnpj-ano-seq``) e casa com o item pelo
+    número do item na compra. O código da fonte principal, quando existe, vence.
+    """
+    fonte = Fonte(bronze.columns)
+    if not fonte.tem("catalogoCodigoItem"):
+        return mapeado
+    complemento = (
+        bronze.where(F.col("endpoint") == "pncp_itens_catalogo")
+        .select(
+            F.col("fanout").alias("_compra"),
+            exprs.inteiro(fonte.c("numeroItem")).alias("_numero"),
+            exprs.texto(fonte.c("catalogoCodigoItem")).alias("_codigo"),
+        )
+        .where(F.col("_codigo").isNotNull())
+    )
+    ponte = (
+        bronze.where(F.col("endpoint") == "pncp_itens")
+        .select(
+            fonte.c("idCompraItem").alias("id_compra_item"),
+            _compra_pncp(fonte.c("idContratacaoPNCP")).alias("_compra"),
+            exprs.inteiro(fonte.c("numeroItemPncp", "numeroItemCompra")).alias("_numero"),
+        )
+        .join(complemento, on=["_compra", "_numero"])
+        .groupBy("id_compra_item")
+        .agg(F.max("_codigo").alias("_codigo_pncp"))
+    )
+    return (
+        mapeado.join(ponte, on="id_compra_item", how="left")
+        .withColumn(
+            "codigo_item_catalogo",
+            F.when(
+                F.col("endpoint") == "pncp_itens",
+                F.coalesce(F.col("codigo_item_catalogo"), F.col("_codigo_pncp")),
+            ).otherwise(F.col("codigo_item_catalogo")),
+        )
+        .drop("_codigo_pncp")
+    )
+
+
 def _combinar_orgaos(bronze: DataFrame, mapeado: DataFrame) -> DataFrame:
     """Enriquecimento dentro da própria entidade: atributos do órgão na UASG."""
     fonte = Fonte(bronze.columns)
@@ -457,6 +515,8 @@ def processar_entidade(
     mapeado = mapear(bronze, ent)
     if entidade == "orgaos":
         mapeado = _combinar_orgaos(bronze, mapeado)
+    if entidade == "itens_compra":
+        mapeado = _completar_catalogo_pncp(bronze, mapeado)
     tipado = tipar(mapeado, ent).withColumn("chave_registro", _chave_registro(ent))
 
     # 3. regras linha a linha

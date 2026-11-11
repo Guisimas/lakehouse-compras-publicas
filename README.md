@@ -5,7 +5,8 @@
 > **Stack:** Python 3.12 · PySpark · Delta Lake · Databricks Free Edition (serverless) ·
 > Unity Catalog · Asset Bundles · GitHub Actions
 > **Fonte:** [API de Dados Abertos do Compras.gov.br](https://dadosabertos.compras.gov.br/swagger-ui/index.html)
-> (Lei 14.133 via PNCP e Lei 8.666 via Legado)
+> (Lei 14.133 via PNCP e Lei 8.666 via Legado), mais a [API do PNCP](https://pncp.gov.br/api/pncp/swagger-ui/index.html)
+> para o código do catálogo dos itens
 
 ---
 
@@ -82,7 +83,8 @@ O job `compras-semanal` roda toda **segunda às 06:00** com as tasks
 1. **planejar** calcula as janelas: os dias desde o último run até ontem, mais as janelas de 14
    e 30 dias atrás (a fonte corrige dados com atraso).
 2. **ingestao** baixa da API para o landing. Contratos usam uma varredura de 365 dias por órgão
-   federal; órgãos e catálogo são recarregados por inteiro.
+   federal; órgãos e catálogo são recarregados por inteiro. Os itens do PNCP chegam sem o código
+   do catálogo, que é buscado na API do PNCP, uma chamada por compra.
 3. **bronze → silver → gold** processam só o que mudou no run. O `run_id` do job liga as três
    camadas, e a Gold reconstrói apenas as partições `ano_mes` afetadas.
 4. **qualidade** registra as regras de atualidade e volume; **otimizar** faz OPTIMIZE, Z-ORDER

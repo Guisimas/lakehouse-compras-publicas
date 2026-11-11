@@ -8,7 +8,7 @@ import respx
 
 from compras.ingestion.client import ComprasClient
 from compras.ingestion.control import Controle
-from compras.ingestion.endpoints import ENDPOINTS, endpoints_da_entidade
+from compras.ingestion.endpoints import ENDPOINTS, PNCP_API, endpoints_da_entidade
 from compras.ingestion.ingestor import Ingestor
 from compras.ingestion.landing import Landing, LandingFanout
 from compras.ingestion.runner import janelas_de_varredura
@@ -147,7 +147,8 @@ def test_fanout_novo_nao_lista_a_pasta_da_janela(ambiente):
     )
     reg = _ingestor(landing, controle, client).ingerir("itens_compra", J)
     assert reg.status == "sucesso" and reg.paginas == 2
-    assert not [p for p in listagens if "itens_compra/data_referencia=" in p]
+    # Uma leitura da janela monta o fan-out do complemento do PNCP; nenhuma por fan-out.
+    assert len([p for p in listagens if "itens_compra/data_referencia=" in p]) == 1
 
 
 @respx.mock
@@ -289,3 +290,55 @@ def test_fornecedores_da_varredura_so_de_contratos_novos(tmp_path):
     assert incremental.cnpjs_fornecedores(date(2026, 9, 24)) == []
     # backfill: todos
     assert LandingFanout(landing).cnpjs_fornecedores(J) == sorted([a, b, c, d])
+
+
+ITENS_PNCP = f"{BASE}/modulo-contratacoes/2_consultarItensContratacoes_PNCP_14133"
+URL_COMPRA_PNCP = f"{PNCP_API}/v1/orgaos/10637926000146/compras/2026/290/itens"
+
+
+def _itens_sem_codigo(_req):
+    base = {"idContratacaoPNCP": "10637926000146-1-000290/2026", "codItemCatalogo": None}
+    com_codigo = {"idContratacaoPNCP": "11111111000111-1-000001/2026", "codItemCatalogo": 9}
+    return httpx.Response(
+        200,
+        json={
+            "resultado": [{**base, "numeroItemPncp": 1}, {**base, "numeroItemPncp": 2}, com_codigo],
+            "totalPaginas": 1,
+        },
+    )
+
+
+@respx.mock
+def test_complemento_do_pncp_so_para_compras_sem_codigo(ambiente):
+    landing, controle, client, root = ambiente
+    respx.get(ITENS_PNCP).mock(side_effect=_itens_sem_codigo)
+    rota = respx.get(URL_COMPRA_PNCP).mock(
+        return_value=httpx.Response(200, json=[{"numeroItem": 1, "catalogoCodigoItem": "15156"}])
+    )
+    reg = _ingestor(landing, controle, client).ingerir("itens_compra", J)
+    assert reg.status == "sucesso"
+    assert rota.call_count == 1  # uma compra sem código; lista incompleta encerra
+    assert rota.calls[0].request.url.params["pagina"] == "1"
+    pasta = root / "itens_compra" / "data_referencia=2026-10-01"
+    nome = "pncp_itens_catalogo__10637926000146-2026-290__p00001.json"
+    envelope = json.loads((pasta / nome).read_text(encoding="utf-8"))
+    assert envelope["meta"]["path"] == URL_COMPRA_PNCP
+    assert envelope["payload"] == [{"numeroItem": 1, "catalogoCodigoItem": "15156"}]
+
+
+@respx.mock
+def test_complemento_fora_do_ar_nao_derruba_os_itens(ambiente):
+    landing, controle, client, root = ambiente
+    respx.get(ITENS_PNCP).mock(side_effect=_itens_sem_codigo)
+    rota = respx.get(URL_COMPRA_PNCP).mock(return_value=httpx.Response(503))
+    reg = _ingestor(landing, controle, client).ingerir("itens_compra", J)
+    assert reg.status == "sucesso"
+    assert any("aviso" in d for d in reg.detalhes)
+    pasta = root / "itens_compra" / "data_referencia=2026-10-01"
+    assert not (pasta / "_SUCCESS__pncp_itens_catalogo__10637926000146-2026-290.json").exists()
+
+    # próximo run: os itens são pulados e só o complemento é tentado de novo
+    rota.mock(return_value=httpx.Response(200, json=[]))
+    reg2 = _ingestor(landing, controle, client, run_id="run-2").ingerir("itens_compra", J)
+    assert reg2.status == "sucesso"
+    assert (pasta / "_SUCCESS__pncp_itens_catalogo__10637926000146-2026-290.json").exists()
