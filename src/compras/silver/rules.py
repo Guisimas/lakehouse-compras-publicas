@@ -56,11 +56,12 @@ def regras_da_entidade(ent: EntidadeSilver, valor_maximo: int) -> list[RegraLinh
             )
         )
 
+    teto = f"{valor_maximo:,}".replace(",", ".")  # R$ 50.000.000.000
     for nome in ent.valores:
         regras.append(
             RegraLinha(
                 "DQ-04",
-                f"{nome} negativo, não numérico ou acima de R$ {valor_maximo:,}".replace(",", "."),
+                f"{nome} negativo, não numérico ou acima de R$ {teto}",
                 lambda df, n=nome: (
                     (F.col(n) < 0) | (F.col(n) > F.lit(valor_maximo)) | _invalido(df, n)
                 ),
