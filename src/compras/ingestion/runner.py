@@ -49,6 +49,12 @@ def executar_ingestao(
     # Fornecedores da varredura de contratos: só os de contratos novos (ver LandingFanout).
     fanout = LandingFanout(landing, contratos_incrementais=modo != "historico")
     ingestor = Ingestor(client, landing, controle, run_id, fanout)
+    # Janelas antigas do run incremental (as de reprocessamento) são baixadas de novo.
+    limite_refazer = (
+        max(janelas) - timedelta(days=settings.dias_refazer_janela)
+        if modo == "incremental" and janelas
+        else None
+    )
     resultados: list[RegistroLog] = []
     try:
         for entidade in [e for e in ORDEM_ENTIDADES if e in entidades]:
@@ -67,7 +73,10 @@ def executar_ingestao(
                     resultados.append(ingestor.ingerir(entidade, janela, modo=modo, forcar=forcar))
                 continue
             for janela in janelas:
-                resultados.append(ingestor.ingerir(entidade, janela, modo=modo, forcar=forcar))
+                refazer = limite_refazer is not None and janela <= limite_refazer
+                resultados.append(
+                    ingestor.ingerir(entidade, janela, modo=modo, forcar=forcar, refazer=refazer)
+                )
     finally:
         if proprio_client:
             client.close()

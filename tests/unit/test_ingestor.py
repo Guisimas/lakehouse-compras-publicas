@@ -343,3 +343,29 @@ def test_complemento_fora_do_ar_nao_derruba_os_itens(ambiente):
     reg2 = _ingestor(landing, controle, client, run_id="run-2").ingerir("itens_compra", J)
     assert reg2.status == "sucesso"
     assert (pasta / "_SUCCESS__pncp_itens_catalogo__10637926000146-2026-290.json").exists()
+
+
+@respx.mock
+def test_refazer_baixa_de_novo_so_os_endpoints_principais(ambiente):
+    """Dia baixado vazio (a fonte publica itens com atraso) volta no reprocessamento."""
+    landing, controle, client, _ = ambiente
+    rota_itens = respx.get(ITENS_PNCP).mock(
+        return_value=httpx.Response(200, json={"resultado": [], "totalPaginas": 0})
+    )
+    rota_compra = respx.get(URL_COMPRA_PNCP).mock(
+        return_value=httpx.Response(200, json=[{"numeroItem": 1, "catalogoCodigoItem": "15156"}])
+    )
+    ing = _ingestor(landing, controle, client)
+    ing.ingerir("itens_compra", J)
+    assert landing.registros("itens_compra", "2026-10-01") == []
+
+    # 14 dias depois os itens chegaram; sem refazer, o _SUCCESS do dia vazio barraria
+    rota_itens.mock(side_effect=_itens_sem_codigo)
+    assert ing.ingerir("itens_compra", J).linhas == 0
+    reg = ing.ingerir("itens_compra", J, refazer=True)
+    assert reg.status == "sucesso" and reg.linhas > 0
+    assert rota_compra.call_count == 1
+
+    # um novo reprocessamento baixa os itens de novo, mas não repete o complemento
+    ing.ingerir("itens_compra", J, refazer=True)
+    assert rota_compra.call_count == 1

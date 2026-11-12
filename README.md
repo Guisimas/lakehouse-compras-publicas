@@ -80,8 +80,10 @@ responde perguntas como:
 O job `compras-semanal` roda toda **segunda às 06:00** com as tasks
 `planejar → ingestao → bronze → silver → gold → qualidade → otimizar`:
 
-1. **planejar** calcula as janelas: os dias desde o último run até ontem, mais as janelas de 14
-   e 30 dias atrás (a fonte corrige dados com atraso).
+1. **planejar** calcula as janelas: os dias desde o último run até ontem e, para cada um deles,
+   os mesmos dias 14, 30, 60 e 90 dias antes. A fonte publica os itens com cerca de duas
+   semanas de atraso e o resultado do pregão com semanas ou meses; por isso essas janelas
+   antigas são baixadas de novo, mesmo já tendo sido baixadas (vazias ou incompletas).
 2. **ingestao** baixa da API para o landing. Contratos usam uma varredura de 365 dias por órgão
    federal; órgãos e catálogo são recarregados por inteiro. Os itens do PNCP chegam sem o código
    do catálogo, que é buscado na API do PNCP, uma chamada por compra.

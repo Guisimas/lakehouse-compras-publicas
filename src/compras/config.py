@@ -33,6 +33,11 @@ class Settings:
     req_por_segundo: float = field(default_factory=lambda: float(_env("REQ_POR_SEGUNDO", "2")))
     max_tentativas: int = field(default_factory=lambda: int(_env("MAX_TENTATIVAS", "6")))
     timeout_s: float = field(default_factory=lambda: float(_env("TIMEOUT_S", "60")))
+    # No modo incremental, janelas com este atraso ou mais em relação à mais recente do run
+    # são baixadas de novo (endpoints principais), mesmo já tendo _SUCCESS: a fonte publica
+    # itens e resultados com semanas de atraso, e o marcador de um dia baixado vazio
+    # impediria o dado de chegar.
+    dias_refazer_janela: int = 14
     # Limiares das regras de aviso
     volume_tolerancia: float = 0.30  # DQ-17
     volume_dias_media: int = 28  # DQ-17

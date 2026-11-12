@@ -81,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     api.add_argument(
         "--dias-reprocessar",
-        default="14,30",
+        default="14,30,60,90",
         help="Janelas antigas baixadas de novo (como no job), separadas por vírgula",
     )
     api.add_argument(
