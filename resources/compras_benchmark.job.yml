@@ -1,0 +1,66 @@
+# Benchmark de otimização (sob demanda): mede as consultas de negócio, força o OPTIMIZE/Z-ORDER
+# e mede de novo. Resultado em quality.benchmark_consultas e quality.volume_tabelas.
+#
+#   databricks bundle run compras_benchmark -t prod
+
+resources:
+  jobs:
+    compras_benchmark:
+      name: compras-benchmark
+      description: >-
+        Mede as consultas de negócio antes e depois do OPTIMIZE/Z-ORDER (forçado, sem VACUUM).
+      max_concurrent_runs: 1
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      environments:
+        - environment_key: default
+          spec:
+            client: "2"
+            dependencies:
+              - ../dist/*.whl
+      tasks:
+        - task_key: benchmark_antes
+          environment_key: default
+          timeout_seconds: 3600
+          python_wheel_task:
+            package_name: compras
+            entry_point: compras-task
+            parameters:
+              - benchmark
+              - "--catalog"
+              - "${var.catalog}"
+              - "--rotulo"
+              - antes
+        - task_key: otimizar
+          environment_key: default
+          depends_on:
+            - task_key: benchmark_antes
+          timeout_seconds: 5400
+          python_wheel_task:
+            package_name: compras
+            entry_point: compras-task
+            parameters:
+              - otimizar
+              - "--catalog"
+              - "${var.catalog}"
+              - "--run-id"
+              - "{{job.run_id}}"
+              - "--vacuum"
+              - "false"
+              - "--intervalo-otimizacao"
+              - "0"
+        - task_key: benchmark_depois
+          environment_key: default
+          depends_on:
+            - task_key: otimizar
+          timeout_seconds: 3600
+          python_wheel_task:
+            package_name: compras
+            entry_point: compras-task
+            parameters:
+              - benchmark
+              - "--catalog"
+              - "${var.catalog}"
+              - "--rotulo"
+              - depois

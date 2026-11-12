@@ -34,6 +34,8 @@ resources:
           default: "false"
         - name: falhar_em_aviso
           default: "false"
+        - name: otimizar
+          default: "true"
       environments: &ambiente
         - environment_key: default
           spec:
@@ -186,6 +188,8 @@ resources:
               - "{{job.run_id}}"
               - "--vacuum"
               - "true"
+              - "--otimizar"
+              - "{{job.parameters.otimizar}}"
 
     compras_backfill:
       name: compras-backfill
@@ -211,5 +215,7 @@ resources:
           default: "true"
         - name: falhar_em_aviso
           default: "false"
+        - name: otimizar
+          default: "true"
       environments: *ambiente
       tasks: *tarefas

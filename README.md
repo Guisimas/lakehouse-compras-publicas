@@ -121,7 +121,7 @@ src/compras/
   maintenance/  OPTIMIZE / Z-ORDER / VACUUM e benchmark de consultas
   consultas/    as 7 consultas de negócio + extras, empacotadas no wheel
   tasks/        entrypoints das tasks do job (compras-task <etapa>)
-resources/      job semanal, job de backfill e dashboard (Asset Bundle)
+resources/      jobs semanal, de backfill e de benchmark, dashboard e alerta (Asset Bundle)
 sql/            métricas deste README, alerta de qualidade, rastreabilidade
 docs/           dicionário de dados
 scripts/        ingestão local (alternativa de emergência)
@@ -228,7 +228,10 @@ Nenhum dado inválido é descartado em silêncio. Cada regra tem uma de três se
 | SCHEMA-NOVA-COLUNA | Coluna nova apareceu na fonte | Landing → Bronze | Aviso |
 | DIM-DESCONHECIDO | Linhas da fato ligadas ao membro desconhecido (sk = -1) | Gold | Aviso |
 
-O alerta SQL das regras de aviso fica em `sql/alerta_qualidade.sql`.
+O alerta SQL (`resources/compras.alert.yml`, com a consulta de `sql/alerta_qualidade.sql`) é
+criado pelo bundle e roda toda segunda às 20:00, depois do job. Ele compara o último run com o
+anterior e só dispara por aviso ou falha **novos**, ou por atraso da ingestão (DQ-16). Os
+avisos que se repetem toda semana não geram e-mail de novo.
 
 ---
 
@@ -260,14 +263,16 @@ bundle:
 As três páginas de negócio têm filtros de mês, órgão, modalidade e grupo do catálogo e mostram
 só a esfera federal (a Gold guarda todas as esferas).
 
-**Benchmark de otimização:** mede as 7 consultas antes e depois do OPTIMIZE/Z-ORDER, no
-workspace, com o entrypoint `compras-task` do wheel, nesta ordem:
+**Benchmark de otimização:** o job `compras-benchmark` mede as 7 consultas antes e depois do
+OPTIMIZE/Z-ORDER, com as tasks `benchmark --rotulo antes` → `otimizar --intervalo-otimizacao 0`
+(força o OPTIMIZE, sem VACUUM) → `benchmark --rotulo depois`:
 
 ```
-compras-task benchmark --rotulo antes
-compras-task otimizar --intervalo-otimizacao 0     # força o OPTIMIZE
-compras-task benchmark --rotulo depois
+databricks bundle run compras_benchmark -t prod
 ```
+
+Para o "antes" medir tabelas sem OPTIMIZE, o backfill roda com `otimizar=false`
+(`--params ...,otimizar=false`) e o benchmark é o primeiro job depois dele.
 
 Cada consulta roda 3 vezes, e a mediana fica em `quality.benchmark_consultas`.
 
