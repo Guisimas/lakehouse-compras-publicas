@@ -107,7 +107,10 @@ def publicar_fato(
     if not particoes_afetadas:
         return
     predicado = f"ano_mes IN ({sql_lista(list(particoes_afetadas))})"
-    sobrescrever_particao(staging, settings.gold(nome), predicado, particoes=("ano_mes",))
+    # mergeSchema: coluna nova na fato entra na tabela existente sem recriá-la.
+    sobrescrever_particao(
+        staging, settings.gold(nome), predicado, particoes=("ano_mes",), merge_schema=True
+    )
     log.info("Fato %s publicada: partições %s", nome, list(particoes_afetadas)[:12])
 
 
