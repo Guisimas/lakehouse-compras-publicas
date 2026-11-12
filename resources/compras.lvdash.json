@@ -1,53 +1,161 @@
 {
   "datasets": [
     {
-      "name": "kpis",
-      "displayName": "KPIs",
+      "name": "compras",
+      "displayName": "Compras (itens, esfera federal)",
       "queryLines": [
-        "SELECT COUNT(DISTINCT f.id_compra) AS compras, COUNT(*) AS itens, SUM(f.valor_total_item) AS valor_total\n",
-        "FROM gold.fato_compras f\n",
-        "JOIN gold.dim_orgao o ON o.sk_orgao = f.sk_orgao\n",
-        "WHERE NOT f.compra_excluida AND o.esfera = 'Federal'\n"
+        "WITH base AS (\n",
+        "  SELECT date_format(to_date(cast(f.ano_mes AS string), 'yyyyMM'), 'yyyy-MM') AS mes,\n",
+        "         to_date(cast(f.ano_mes AS string), 'yyyyMM') AS mes_data,\n",
+        "         coalesce(o.nome_orgao, o.nome_uasg) AS orgao,\n",
+        "         m.grupo AS modalidade,\n",
+        "         coalesce(i.nome_grupo, 'Sem catálogo') AS grupo_catalogo,\n",
+        "         coalesce(i.nome_classe, 'Sem catálogo') AS classe_catalogo,\n",
+        "         f.id_compra, f.valor_total_item\n",
+        "  FROM gold.fato_compras f\n",
+        "  JOIN gold.dim_orgao o ON o.sk_orgao = f.sk_orgao\n",
+        "  JOIN gold.dim_modalidade m ON m.sk_modalidade = f.sk_modalidade\n",
+        "  JOIN gold.dim_item i ON i.sk_item = f.sk_item\n",
+        "  WHERE NOT f.compra_excluida AND o.esfera = 'Federal'\n",
+        "),\n",
+        "rank_orgao AS (\n",
+        "  SELECT orgao, row_number() OVER (ORDER BY SUM(valor_total_item) DESC) AS r\n",
+        "  FROM base GROUP BY orgao\n",
+        "),\n",
+        "rank_grupo_catalogo AS (\n",
+        "  SELECT grupo_catalogo, row_number() OVER (ORDER BY SUM(valor_total_item) DESC) AS r\n",
+        "  FROM base GROUP BY grupo_catalogo\n",
+        "),\n",
+        "rank_classe_catalogo AS (\n",
+        "  SELECT classe_catalogo, row_number() OVER (ORDER BY SUM(valor_total_item) DESC) AS r\n",
+        "  FROM base GROUP BY classe_catalogo\n",
+        ")\n",
+        "SELECT base.*,\n",
+        "       CASE WHEN rank_orgao.r <= 15 THEN base.orgao ELSE 'Outros órgãos' END AS orgao_top,\n",
+        "       CASE WHEN rank_grupo_catalogo.r <= 12 THEN base.grupo_catalogo ELSE 'Outros grupos' END AS grupo_catalogo_top,\n",
+        "       CASE WHEN rank_classe_catalogo.r <= 15 THEN base.classe_catalogo ELSE 'Outras classes' END AS classe_catalogo_top\n",
+        "FROM base\n",
+        "JOIN rank_orgao ON rank_orgao.orgao = base.orgao\n",
+        "JOIN rank_grupo_catalogo ON rank_grupo_catalogo.grupo_catalogo = base.grupo_catalogo\n",
+        "JOIN rank_classe_catalogo ON rank_classe_catalogo.classe_catalogo = base.classe_catalogo\n"
       ]
     },
     {
-      "name": "orgaos",
-      "displayName": "Gasto por órgão",
+      "name": "economia",
+      "displayName": "Economia na disputa (pregão e concorrência)",
       "queryLines": [
-        "SELECT coalesce(o.nome_orgao, o.nome_uasg) AS orgao, SUM(f.valor_total_item) AS valor_total\n",
-        "FROM gold.fato_compras f\n",
-        "JOIN gold.dim_orgao o ON o.sk_orgao = f.sk_orgao\n",
-        "WHERE NOT f.compra_excluida AND o.esfera = 'Federal'\n",
-        "GROUP BY 1\n",
-        "ORDER BY 2 DESC\n",
-        "LIMIT 15\n"
+        "WITH base AS (\n",
+        "  SELECT date_format(to_date(cast(f.ano_mes AS string), 'yyyyMM'), 'yyyy-MM') AS mes,\n",
+        "         to_date(cast(f.ano_mes AS string), 'yyyyMM') AS mes_data,\n",
+        "         coalesce(o.nome_orgao, o.nome_uasg) AS orgao,\n",
+        "         m.grupo AS modalidade,\n",
+        "         coalesce(i.nome_grupo, 'Sem catálogo') AS grupo_catalogo,\n",
+        "         coalesce(i.nome_classe, 'Sem catálogo') AS classe_catalogo,\n",
+        "         f.valor_estimado, f.valor_homologado\n",
+        "  FROM gold.fato_compras f\n",
+        "  JOIN gold.dim_orgao o ON o.sk_orgao = f.sk_orgao\n",
+        "  JOIN gold.dim_modalidade m ON m.sk_modalidade = f.sk_modalidade\n",
+        "  JOIN gold.dim_item i ON i.sk_item = f.sk_item\n",
+        "  WHERE NOT f.compra_excluida AND o.esfera = 'Federal'\n",
+        "    AND m.grupo IN ('Pregão', 'Concorrência')\n",
+        "    AND f.valor_estimado > 0\n",
+        "),\n",
+        "rank_orgao AS (\n",
+        "  SELECT orgao, row_number() OVER (ORDER BY SUM(valor_estimado) DESC) AS r\n",
+        "  FROM base GROUP BY orgao\n",
+        ")\n",
+        "SELECT base.*,\n",
+        "       CASE WHEN rank_orgao.r <= 15 THEN base.orgao ELSE 'Outros órgãos' END AS orgao_top,\n",
+        "       CASE WHEN base.valor_homologado IS NOT NULL THEN 1 ELSE 0 END AS tem_resultado,\n",
+        "       CASE WHEN base.valor_homologado IS NOT NULL THEN base.valor_estimado END AS estimado_com_resultado\n",
+        "FROM base\n",
+        "JOIN rank_orgao ON rank_orgao.orgao = base.orgao\n"
       ]
     },
     {
-      "name": "mensal",
-      "displayName": "Evolução mensal",
+      "name": "preco",
+      "displayName": "Preço por material (comparáveis)",
       "queryLines": [
-        "SELECT to_date(concat(cast(d.ano_mes AS string), '01'), 'yyyyMMdd') AS mes,\n",
-        "       m.regime_legal,\n",
-        "       SUM(f.valor_total_item) AS valor_total\n",
-        "FROM gold.fato_compras f\n",
-        "JOIN gold.dim_data d ON d.sk_data = f.sk_data_publicacao\n",
-        "JOIN gold.dim_modalidade m ON m.sk_modalidade = f.sk_modalidade\n",
-        "JOIN gold.dim_orgao o ON o.sk_orgao = f.sk_orgao\n",
-        "WHERE NOT f.compra_excluida AND o.esfera = 'Federal'\n",
-        "GROUP BY ALL\n"
+        "WITH base AS (\n",
+        "  SELECT date_format(to_date(cast(f.ano_mes AS string), 'yyyyMM'), 'yyyy-MM') AS mes,\n",
+        "         to_date(cast(f.ano_mes AS string), 'yyyyMM') AS mes_data,\n",
+        "         coalesce(o.nome_orgao, o.nome_uasg) AS orgao,\n",
+        "         m.grupo AS modalidade,\n",
+        "         coalesce(i.nome_grupo, 'Sem catálogo') AS grupo_catalogo,\n",
+        "         coalesce(i.nome_classe, 'Sem catálogo') AS classe_catalogo,\n",
+        "         f.id_compra, f.sk_orgao, f.unidade, f.quantidade, f.valor_unitario, f.valor_eh_estimado,\n",
+        "         i.codigo_item, i.descricao\n",
+        "  FROM gold.fato_compras f\n",
+        "  JOIN gold.dim_orgao o ON o.sk_orgao = f.sk_orgao\n",
+        "  JOIN gold.dim_modalidade m ON m.sk_modalidade = f.sk_modalidade\n",
+        "  JOIN gold.dim_item i ON i.sk_item = f.sk_item\n",
+        "  WHERE NOT f.compra_excluida AND o.esfera = 'Federal'\n",
+        "    AND i.tipo_item = 'M'\n",
+        "    AND f.unidade IS NOT NULL\n",
+        "    AND f.valor_unitario > 0\n",
+        "),\n",
+        "referencia AS (\n",
+        "  SELECT codigo_item, unidade, MEDIAN(valor_unitario) AS preco_mediano,\n",
+        "         COUNT(DISTINCT sk_orgao) AS orgaos_comparados\n",
+        "  FROM base\n",
+        "  GROUP BY codigo_item, unidade\n",
+        "  HAVING COUNT(DISTINCT sk_orgao) >= 3\n",
+        ")\n",
+        "SELECT b.mes, b.orgao, b.modalidade, b.grupo_catalogo, b.id_compra, b.codigo_item,\n",
+        "       b.descricao, b.unidade, b.quantidade, b.valor_unitario, r.preco_mediano,\n",
+        "       ROUND(b.valor_unitario / r.preco_mediano, 1) AS vezes_mediana,\n",
+        "       r.orgaos_comparados,\n",
+        "       CASE WHEN b.valor_eh_estimado THEN 'estimado' ELSE 'homologado' END AS base_preco,\n",
+        "       CASE WHEN b.valor_unitario > 2 * r.preco_mediano THEN 1 ELSE 0 END AS acima_2x,\n",
+        "       CASE WHEN b.valor_unitario > 2 * r.preco_mediano\n",
+        "            THEN (b.valor_unitario - r.preco_mediano) * b.quantidade END AS valor_acima_mediana\n",
+        "FROM base b\n",
+        "JOIN referencia r USING (codigo_item, unidade)\n"
       ]
     },
     {
-      "name": "modalidades",
-      "displayName": "Modalidades",
+      "name": "preco_acima",
+      "displayName": "Compras acima de 2× a mediana",
       "queryLines": [
-        "SELECT m.grupo, m.regime_legal, SUM(f.valor_total_item) AS valor_total\n",
-        "FROM gold.fato_compras f\n",
-        "JOIN gold.dim_modalidade m ON m.sk_modalidade = f.sk_modalidade\n",
-        "JOIN gold.dim_orgao o ON o.sk_orgao = f.sk_orgao\n",
-        "WHERE NOT f.compra_excluida AND o.esfera = 'Federal'\n",
-        "GROUP BY ALL\n"
+        "SELECT * FROM (\n",
+        "WITH base AS (\n",
+        "  SELECT date_format(to_date(cast(f.ano_mes AS string), 'yyyyMM'), 'yyyy-MM') AS mes,\n",
+        "         to_date(cast(f.ano_mes AS string), 'yyyyMM') AS mes_data,\n",
+        "         coalesce(o.nome_orgao, o.nome_uasg) AS orgao,\n",
+        "         m.grupo AS modalidade,\n",
+        "         coalesce(i.nome_grupo, 'Sem catálogo') AS grupo_catalogo,\n",
+        "         coalesce(i.nome_classe, 'Sem catálogo') AS classe_catalogo,\n",
+        "         f.id_compra, f.sk_orgao, f.unidade, f.quantidade, f.valor_unitario, f.valor_eh_estimado,\n",
+        "         i.codigo_item, i.descricao\n",
+        "  FROM gold.fato_compras f\n",
+        "  JOIN gold.dim_orgao o ON o.sk_orgao = f.sk_orgao\n",
+        "  JOIN gold.dim_modalidade m ON m.sk_modalidade = f.sk_modalidade\n",
+        "  JOIN gold.dim_item i ON i.sk_item = f.sk_item\n",
+        "  WHERE NOT f.compra_excluida AND o.esfera = 'Federal'\n",
+        "    AND i.tipo_item = 'M'\n",
+        "    AND f.unidade IS NOT NULL\n",
+        "    AND f.valor_unitario > 0\n",
+        "),\n",
+        "referencia AS (\n",
+        "  SELECT codigo_item, unidade, MEDIAN(valor_unitario) AS preco_mediano,\n",
+        "         COUNT(DISTINCT sk_orgao) AS orgaos_comparados\n",
+        "  FROM base\n",
+        "  GROUP BY codigo_item, unidade\n",
+        "  HAVING COUNT(DISTINCT sk_orgao) >= 3\n",
+        ")\n",
+        "SELECT b.mes, b.orgao, b.modalidade, b.grupo_catalogo, b.id_compra, b.codigo_item,\n",
+        "       b.descricao, b.unidade, b.quantidade, b.valor_unitario, r.preco_mediano,\n",
+        "       ROUND(b.valor_unitario / r.preco_mediano, 1) AS vezes_mediana,\n",
+        "       r.orgaos_comparados,\n",
+        "       CASE WHEN b.valor_eh_estimado THEN 'estimado' ELSE 'homologado' END AS base_preco,\n",
+        "       CASE WHEN b.valor_unitario > 2 * r.preco_mediano THEN 1 ELSE 0 END AS acima_2x,\n",
+        "       CASE WHEN b.valor_unitario > 2 * r.preco_mediano\n",
+        "            THEN (b.valor_unitario - r.preco_mediano) * b.quantidade END AS valor_acima_mediana\n",
+        "FROM base b\n",
+        "JOIN referencia r USING (codigo_item, unidade)\n",
+        ")\n",
+        "WHERE acima_2x = 1\n",
+        "ORDER BY valor_acima_mediana DESC\n"
       ]
     },
     {
@@ -107,16 +215,16 @@
   ],
   "pages": [
     {
-      "name": "gastos",
-      "displayName": "Gastos",
+      "name": "dinheiro",
+      "displayName": "Onde o dinheiro vai",
       "pageType": "PAGE_TYPE_CANVAS",
       "layout": [
         {
           "widget": {
-            "name": "titulo",
+            "name": "p1_titulo",
             "multilineTextboxSpec": {
               "lines": [
-                "# Compras públicas federais\n\nFonte: Compras.gov.br (PNCP/Lei 14.133 e Legado/Lei 8.666). Só órgãos da esfera federal: o PNCP também publica compras de estados e municípios, que ficam na Gold mas fora deste painel. Valor do item = homologado quando existe, senão estimado. Contratos ficam em tabela própria e não são somados aos itens."
+                "# Onde o dinheiro vai\n\nFonte: Compras.gov.br (PNCP/Lei 14.133 e Legado/Lei 8.666), só órgãos da esfera federal. Valor do item = homologado quando existe, senão estimado. Os rankings mostram as maiores categorias do período todo; o restante soma em \"Outros\". Os filtros valem para todos os gráficos de itens."
               ]
             }
           },
@@ -129,16 +237,16 @@
         },
         {
           "widget": {
-            "name": "kpi_valor",
+            "name": "p1_f_mes",
             "queries": [
               {
-                "name": "main_query",
+                "name": "p1_f_mes_compras",
                 "query": {
-                  "datasetName": "kpis",
+                  "datasetName": "compras",
                   "fields": [
                     {
-                      "name": "sum(valor_total)",
-                      "expression": "SUM(`valor_total`)"
+                      "name": "mes",
+                      "expression": "`mes`"
                     }
                   ],
                   "disaggregated": false
@@ -147,38 +255,170 @@
             ],
             "spec": {
               "version": 2,
-              "widgetType": "counter",
+              "widgetType": "filter-multi-select",
               "encodings": {
-                "value": {
-                  "fieldName": "sum(valor_total)",
-                  "displayName": "Valor total (itens)"
-                }
+                "fields": [
+                  {
+                    "fieldName": "mes",
+                    "displayName": "mes",
+                    "queryName": "p1_f_mes_compras"
+                  }
+                ]
               },
               "frame": {
                 "showTitle": true,
-                "title": "Valor total (itens)"
+                "title": "Mês"
               }
             }
           },
           "position": {
             "x": 0,
             "y": 2,
-            "width": 2,
-            "height": 3
+            "width": 1,
+            "height": 2
           }
         },
         {
           "widget": {
-            "name": "kpi_compras",
+            "name": "p1_f_orgao",
+            "queries": [
+              {
+                "name": "p1_f_orgao_compras",
+                "query": {
+                  "datasetName": "compras",
+                  "fields": [
+                    {
+                      "name": "orgao",
+                      "expression": "`orgao`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "orgao",
+                    "displayName": "orgao",
+                    "queryName": "p1_f_orgao_compras"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Órgão"
+              }
+            }
+          },
+          "position": {
+            "x": 1,
+            "y": 2,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "p1_f_modalidade",
+            "queries": [
+              {
+                "name": "p1_f_modalidade_compras",
+                "query": {
+                  "datasetName": "compras",
+                  "fields": [
+                    {
+                      "name": "modalidade",
+                      "expression": "`modalidade`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "modalidade",
+                    "displayName": "modalidade",
+                    "queryName": "p1_f_modalidade_compras"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Modalidade"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 2,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "p1_f_grupo_catalogo",
+            "queries": [
+              {
+                "name": "p1_f_grupo_catalogo_compras",
+                "query": {
+                  "datasetName": "compras",
+                  "fields": [
+                    {
+                      "name": "grupo_catalogo",
+                      "expression": "`grupo_catalogo`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "grupo_catalogo",
+                    "displayName": "grupo_catalogo",
+                    "queryName": "p1_f_grupo_catalogo_compras"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Grupo do catálogo"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 2,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "p1_valor",
             "queries": [
               {
                 "name": "main_query",
                 "query": {
-                  "datasetName": "kpis",
+                  "datasetName": "compras",
                   "fields": [
                     {
-                      "name": "sum(compras)",
-                      "expression": "SUM(`compras`)"
+                      "name": "valor",
+                      "expression": "SUM(`valor_total_item`)"
                     }
                   ],
                   "disaggregated": false
@@ -190,7 +430,47 @@
               "widgetType": "counter",
               "encodings": {
                 "value": {
-                  "fieldName": "sum(compras)",
+                  "fieldName": "valor",
+                  "displayName": "Valor (itens)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Valor (itens)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 4,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "p1_compras",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "compras",
+                  "fields": [
+                    {
+                      "name": "valor",
+                      "expression": "COUNT(DISTINCT `id_compra`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "valor",
                   "displayName": "Compras"
                 }
               },
@@ -202,23 +482,23 @@
           },
           "position": {
             "x": 2,
-            "y": 2,
+            "y": 4,
             "width": 2,
             "height": 3
           }
         },
         {
           "widget": {
-            "name": "kpi_itens",
+            "name": "p1_itens",
             "queries": [
               {
                 "name": "main_query",
                 "query": {
-                  "datasetName": "kpis",
+                  "datasetName": "compras",
                   "fields": [
                     {
-                      "name": "sum(itens)",
-                      "expression": "SUM(`itens`)"
+                      "name": "valor",
+                      "expression": "COUNT(*)"
                     }
                   ],
                   "disaggregated": false
@@ -230,7 +510,7 @@
               "widgetType": "counter",
               "encodings": {
                 "value": {
-                  "fieldName": "sum(itens)",
+                  "fieldName": "valor",
                   "displayName": "Itens"
                 }
               },
@@ -242,31 +522,202 @@
           },
           "position": {
             "x": 4,
-            "y": 2,
+            "y": 4,
             "width": 2,
             "height": 3
           }
         },
         {
           "widget": {
-            "name": "evolucao",
+            "name": "p1_grupos",
             "queries": [
               {
                 "name": "main_query",
                 "query": {
-                  "datasetName": "mensal",
+                  "datasetName": "compras",
                   "fields": [
                     {
-                      "name": "mes",
-                      "expression": "`mes`"
+                      "name": "grupo_catalogo_top",
+                      "expression": "`grupo_catalogo_top`"
                     },
                     {
-                      "name": "sum(valor_total)",
-                      "expression": "SUM(`valor_total`)"
+                      "name": "valor",
+                      "expression": "SUM(`valor_total_item`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "valor",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "valor"
+                },
+                "y": {
+                  "fieldName": "grupo_catalogo_top",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  },
+                  "displayName": "grupo_catalogo_top"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Gasto por grupo do catálogo"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 7,
+            "width": 3,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "p1_classes",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "compras",
+                  "fields": [
+                    {
+                      "name": "classe_catalogo_top",
+                      "expression": "`classe_catalogo_top`"
                     },
                     {
-                      "name": "regime_legal",
-                      "expression": "`regime_legal`"
+                      "name": "valor",
+                      "expression": "SUM(`valor_total_item`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "valor",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "valor"
+                },
+                "y": {
+                  "fieldName": "classe_catalogo_top",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  },
+                  "displayName": "classe_catalogo_top"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Classes do catálogo com maior gasto"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 7,
+            "width": 3,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "p1_orgaos",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "compras",
+                  "fields": [
+                    {
+                      "name": "orgao_top",
+                      "expression": "`orgao_top`"
+                    },
+                    {
+                      "name": "valor",
+                      "expression": "SUM(`valor_total_item`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "valor",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "valor"
+                },
+                "y": {
+                  "fieldName": "orgao_top",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  },
+                  "displayName": "orgao_top"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Órgãos com maior gasto"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 15,
+            "width": 3,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "p1_mensal",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "compras",
+                  "fields": [
+                    {
+                      "name": "mes_data",
+                      "expression": "`mes_data`"
+                    },
+                    {
+                      "name": "valor",
+                      "expression": "SUM(`valor_total_item`)"
+                    },
+                    {
+                      "name": "modalidade",
+                      "expression": "`modalidade`"
                     }
                   ],
                   "disaggregated": false
@@ -278,162 +729,59 @@
               "widgetType": "line",
               "encodings": {
                 "x": {
-                  "fieldName": "mes",
+                  "fieldName": "mes_data",
                   "scale": {
                     "type": "temporal"
                   },
-                  "displayName": "mes"
+                  "displayName": "mês"
                 },
                 "y": {
-                  "fieldName": "sum(valor_total)",
+                  "fieldName": "valor",
                   "scale": {
                     "type": "quantitative"
                   },
-                  "displayName": "valor_total"
+                  "displayName": "valor"
                 },
                 "color": {
-                  "fieldName": "regime_legal",
+                  "fieldName": "modalidade",
                   "scale": {
                     "type": "categorical"
                   },
-                  "displayName": "regime_legal"
+                  "displayName": "modalidade"
                 }
               },
               "frame": {
                 "showTitle": true,
-                "title": "Evolução mensal por regime legal"
-              }
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 5,
-            "width": 6,
-            "height": 6
-          }
-        },
-        {
-          "widget": {
-            "name": "por_orgao",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "orgaos",
-                  "fields": [
-                    {
-                      "name": "orgao",
-                      "expression": "`orgao`"
-                    },
-                    {
-                      "name": "sum(valor_total)",
-                      "expression": "SUM(`valor_total`)"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "widgetType": "bar",
-              "encodings": {
-                "x": {
-                  "fieldName": "sum(valor_total)",
-                  "scale": {
-                    "type": "quantitative"
-                  },
-                  "displayName": "valor_total"
-                },
-                "y": {
-                  "fieldName": "orgao",
-                  "scale": {
-                    "type": "categorical"
-                  },
-                  "displayName": "orgao"
-                }
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "Órgãos com maior gasto"
-              }
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 11,
-            "width": 3,
-            "height": 8
-          }
-        },
-        {
-          "widget": {
-            "name": "por_modalidade",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "modalidades",
-                  "fields": [
-                    {
-                      "name": "grupo",
-                      "expression": "`grupo`"
-                    },
-                    {
-                      "name": "sum(valor_total)",
-                      "expression": "SUM(`valor_total`)"
-                    },
-                    {
-                      "name": "regime_legal",
-                      "expression": "`regime_legal`"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "widgetType": "bar",
-              "encodings": {
-                "x": {
-                  "fieldName": "grupo",
-                  "scale": {
-                    "type": "categorical"
-                  },
-                  "displayName": "grupo"
-                },
-                "y": {
-                  "fieldName": "sum(valor_total)",
-                  "scale": {
-                    "type": "quantitative"
-                  },
-                  "displayName": "valor_total"
-                },
-                "color": {
-                  "fieldName": "regime_legal",
-                  "scale": {
-                    "type": "categorical"
-                  },
-                  "displayName": "regime_legal"
-                }
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "Volume por modalidade"
+                "title": "Evolução mensal por modalidade"
               }
             }
           },
           "position": {
             "x": 3,
-            "y": 11,
+            "y": 15,
             "width": 3,
             "height": 8
           }
         },
         {
           "widget": {
-            "name": "top_fornecedores",
+            "name": "p1_aviso_contratos",
+            "multilineTextboxSpec": {
+              "lines": [
+                "### Contratos\n\nA tabela abaixo vem dos **contratos** (outra tabela, grão de contrato) e cobre todo o período, sem os filtros acima. Valor de contrato não soma com valor de item: um contrato pode cobrir vários itens e anos."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 23,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "p1_fornecedores",
             "queries": [
               {
                 "name": "main_query",
@@ -472,23 +820,23 @@
                 "columns": [
                   {
                     "fieldName": "ni_fornecedor",
-                    "displayName": "ni_fornecedor"
+                    "displayName": "CNPJ/CPF"
                   },
                   {
                     "fieldName": "razao_social",
-                    "displayName": "razao_social"
+                    "displayName": "Razão social"
                   },
                   {
                     "fieldName": "porte",
-                    "displayName": "porte"
+                    "displayName": "Porte"
                   },
                   {
                     "fieldName": "contratos",
-                    "displayName": "contratos"
+                    "displayName": "Contratos"
                   },
                   {
                     "fieldName": "valor_global",
-                    "displayName": "valor_global"
+                    "displayName": "Valor global"
                   }
                 ]
               },
@@ -500,9 +848,1074 @@
           },
           "position": {
             "x": 0,
-            "y": 19,
+            "y": 25,
             "width": 6,
             "height": 8
+          }
+        }
+      ]
+    },
+    {
+      "name": "economia",
+      "displayName": "Economia na disputa",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layout": [
+        {
+          "widget": {
+            "name": "p2_titulo",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Economia na disputa\n\nSó pregão e concorrência (dispensa e inexigibilidade não têm disputa de preço). **Economia** = 1 − homologado ÷ estimado, medida só nos itens que já têm resultado. **Cobertura** = % de itens com resultado: o resultado do pregão sai semanas depois da publicação, então meses recentes têm cobertura baixa e a economia deles ainda vai mudar. Itens com orçamento sigiloso (estimado zerado) ficam de fora."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "p2_f_mes",
+            "queries": [
+              {
+                "name": "p2_f_mes_economia",
+                "query": {
+                  "datasetName": "economia",
+                  "fields": [
+                    {
+                      "name": "mes",
+                      "expression": "`mes`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "mes",
+                    "displayName": "mes",
+                    "queryName": "p2_f_mes_economia"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Mês"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "p2_f_orgao",
+            "queries": [
+              {
+                "name": "p2_f_orgao_economia",
+                "query": {
+                  "datasetName": "economia",
+                  "fields": [
+                    {
+                      "name": "orgao",
+                      "expression": "`orgao`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "orgao",
+                    "displayName": "orgao",
+                    "queryName": "p2_f_orgao_economia"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Órgão"
+              }
+            }
+          },
+          "position": {
+            "x": 1,
+            "y": 2,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "p2_f_modalidade",
+            "queries": [
+              {
+                "name": "p2_f_modalidade_economia",
+                "query": {
+                  "datasetName": "economia",
+                  "fields": [
+                    {
+                      "name": "modalidade",
+                      "expression": "`modalidade`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "modalidade",
+                    "displayName": "modalidade",
+                    "queryName": "p2_f_modalidade_economia"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Modalidade"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 2,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "p2_f_grupo_catalogo",
+            "queries": [
+              {
+                "name": "p2_f_grupo_catalogo_economia",
+                "query": {
+                  "datasetName": "economia",
+                  "fields": [
+                    {
+                      "name": "grupo_catalogo",
+                      "expression": "`grupo_catalogo`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "grupo_catalogo",
+                    "displayName": "grupo_catalogo",
+                    "queryName": "p2_f_grupo_catalogo_economia"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Grupo do catálogo"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 2,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "p2_economia",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "economia",
+                  "fields": [
+                    {
+                      "name": "valor",
+                      "expression": "100 * (1 - SUM(`valor_homologado`) / SUM(`estimado_com_resultado`))"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "valor",
+                  "displayName": "Economia (%)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Economia (%)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 4,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "p2_cobertura",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "economia",
+                  "fields": [
+                    {
+                      "name": "valor",
+                      "expression": "100 * AVG(`tem_resultado`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "valor",
+                  "displayName": "Cobertura (% itens com resultado)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Cobertura (% itens com resultado)"
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 4,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "p2_economia_rs",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "economia",
+                  "fields": [
+                    {
+                      "name": "valor",
+                      "expression": "SUM(`estimado_com_resultado`) - SUM(`valor_homologado`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "valor",
+                  "displayName": "Economia (R$)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Economia (R$)"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 4,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "p2_modalidade",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "economia",
+                  "fields": [
+                    {
+                      "name": "modalidade",
+                      "expression": "`modalidade`"
+                    },
+                    {
+                      "name": "valor",
+                      "expression": "100 * (1 - SUM(`valor_homologado`) / SUM(`estimado_com_resultado`))"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "modalidade",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "modalidade"
+                },
+                "y": {
+                  "fieldName": "valor",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "economia (%)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Economia por modalidade (%)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 7,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "p2_cobertura_mes",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "economia",
+                  "fields": [
+                    {
+                      "name": "mes_data",
+                      "expression": "`mes_data`"
+                    },
+                    {
+                      "name": "valor",
+                      "expression": "100 * AVG(`tem_resultado`)"
+                    },
+                    {
+                      "name": "modalidade",
+                      "expression": "`modalidade`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "mes_data",
+                  "scale": {
+                    "type": "temporal"
+                  },
+                  "displayName": "mês"
+                },
+                "y": {
+                  "fieldName": "valor",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "cobertura (%)"
+                },
+                "color": {
+                  "fieldName": "modalidade",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "modalidade"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Cobertura por mês de publicação (%)"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 7,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "p2_orgao_economia",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "economia",
+                  "fields": [
+                    {
+                      "name": "orgao_top",
+                      "expression": "`orgao_top`"
+                    },
+                    {
+                      "name": "valor",
+                      "expression": "100 * (1 - SUM(`valor_homologado`) / SUM(`estimado_com_resultado`))"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "valor",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "economia (%)"
+                },
+                "y": {
+                  "fieldName": "orgao_top",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  },
+                  "displayName": "orgao_top"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Economia por órgão (%)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 13,
+            "width": 3,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "p2_orgao_cobertura",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "economia",
+                  "fields": [
+                    {
+                      "name": "orgao_top",
+                      "expression": "`orgao_top`"
+                    },
+                    {
+                      "name": "valor",
+                      "expression": "100 * AVG(`tem_resultado`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "valor",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "cobertura (%)"
+                },
+                "y": {
+                  "fieldName": "orgao_top",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  },
+                  "displayName": "orgao_top"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Cobertura por órgão (%)"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 13,
+            "width": 3,
+            "height": 8
+          }
+        }
+      ]
+    },
+    {
+      "name": "preco",
+      "displayName": "Preço por item",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layout": [
+        {
+          "widget": {
+            "name": "p3_titulo",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Preço pago por item\n\nCompara o preço unitário de **materiais** de mesmo código do catálogo e mesma unidade comprados por 3 ou mais órgãos; a referência é a mediana do grupo no período todo. Serviços ficam de fora: a unidade deles (quase sempre \"UNIDADE\") não diz o escopo, então o preço não é comparável. Preço = homologado quando existe, senão estimado (coluna *base*). \"Acima\" = mais que o dobro da mediana."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "p3_f_mes",
+            "queries": [
+              {
+                "name": "p3_f_mes_preco",
+                "query": {
+                  "datasetName": "preco",
+                  "fields": [
+                    {
+                      "name": "mes",
+                      "expression": "`mes`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "p3_f_mes_preco_acima",
+                "query": {
+                  "datasetName": "preco_acima",
+                  "fields": [
+                    {
+                      "name": "mes",
+                      "expression": "`mes`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "mes",
+                    "displayName": "mes",
+                    "queryName": "p3_f_mes_preco"
+                  },
+                  {
+                    "fieldName": "mes",
+                    "displayName": "mes",
+                    "queryName": "p3_f_mes_preco_acima"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Mês"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "p3_f_orgao",
+            "queries": [
+              {
+                "name": "p3_f_orgao_preco",
+                "query": {
+                  "datasetName": "preco",
+                  "fields": [
+                    {
+                      "name": "orgao",
+                      "expression": "`orgao`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "p3_f_orgao_preco_acima",
+                "query": {
+                  "datasetName": "preco_acima",
+                  "fields": [
+                    {
+                      "name": "orgao",
+                      "expression": "`orgao`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "orgao",
+                    "displayName": "orgao",
+                    "queryName": "p3_f_orgao_preco"
+                  },
+                  {
+                    "fieldName": "orgao",
+                    "displayName": "orgao",
+                    "queryName": "p3_f_orgao_preco_acima"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Órgão"
+              }
+            }
+          },
+          "position": {
+            "x": 1,
+            "y": 2,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "p3_f_modalidade",
+            "queries": [
+              {
+                "name": "p3_f_modalidade_preco",
+                "query": {
+                  "datasetName": "preco",
+                  "fields": [
+                    {
+                      "name": "modalidade",
+                      "expression": "`modalidade`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "p3_f_modalidade_preco_acima",
+                "query": {
+                  "datasetName": "preco_acima",
+                  "fields": [
+                    {
+                      "name": "modalidade",
+                      "expression": "`modalidade`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "modalidade",
+                    "displayName": "modalidade",
+                    "queryName": "p3_f_modalidade_preco"
+                  },
+                  {
+                    "fieldName": "modalidade",
+                    "displayName": "modalidade",
+                    "queryName": "p3_f_modalidade_preco_acima"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Modalidade"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 2,
+            "width": 1,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "p3_f_grupo_catalogo",
+            "queries": [
+              {
+                "name": "p3_f_grupo_catalogo_preco",
+                "query": {
+                  "datasetName": "preco",
+                  "fields": [
+                    {
+                      "name": "grupo_catalogo",
+                      "expression": "`grupo_catalogo`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "p3_f_grupo_catalogo_preco_acima",
+                "query": {
+                  "datasetName": "preco_acima",
+                  "fields": [
+                    {
+                      "name": "grupo_catalogo",
+                      "expression": "`grupo_catalogo`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "grupo_catalogo",
+                    "displayName": "grupo_catalogo",
+                    "queryName": "p3_f_grupo_catalogo_preco"
+                  },
+                  {
+                    "fieldName": "grupo_catalogo",
+                    "displayName": "grupo_catalogo",
+                    "queryName": "p3_f_grupo_catalogo_preco_acima"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Grupo do catálogo"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 2,
+            "width": 2,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "p3_comparaveis",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "preco",
+                  "fields": [
+                    {
+                      "name": "valor",
+                      "expression": "COUNT(*)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "valor",
+                  "displayName": "Itens comparáveis"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Itens comparáveis"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 4,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "p3_acima",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "preco",
+                  "fields": [
+                    {
+                      "name": "valor",
+                      "expression": "SUM(`acima_2x`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "valor",
+                  "displayName": "Itens acima de 2× a mediana"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Itens acima de 2× a mediana"
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 4,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "p3_valor_acima",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "preco",
+                  "fields": [
+                    {
+                      "name": "valor",
+                      "expression": "SUM(`valor_acima_mediana`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "valor",
+                  "displayName": "Pago acima da mediana (R$)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Pago acima da mediana (R$)"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 4,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "p3_tabela",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "preco_acima",
+                  "fields": [
+                    {
+                      "name": "mes",
+                      "expression": "`mes`"
+                    },
+                    {
+                      "name": "orgao",
+                      "expression": "`orgao`"
+                    },
+                    {
+                      "name": "descricao",
+                      "expression": "`descricao`"
+                    },
+                    {
+                      "name": "unidade",
+                      "expression": "`unidade`"
+                    },
+                    {
+                      "name": "quantidade",
+                      "expression": "`quantidade`"
+                    },
+                    {
+                      "name": "valor_unitario",
+                      "expression": "`valor_unitario`"
+                    },
+                    {
+                      "name": "preco_mediano",
+                      "expression": "`preco_mediano`"
+                    },
+                    {
+                      "name": "vezes_mediana",
+                      "expression": "`vezes_mediana`"
+                    },
+                    {
+                      "name": "valor_acima_mediana",
+                      "expression": "`valor_acima_mediana`"
+                    },
+                    {
+                      "name": "base_preco",
+                      "expression": "`base_preco`"
+                    },
+                    {
+                      "name": "orgaos_comparados",
+                      "expression": "`orgaos_comparados`"
+                    },
+                    {
+                      "name": "id_compra",
+                      "expression": "`id_compra`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "mes",
+                    "displayName": "Mês"
+                  },
+                  {
+                    "fieldName": "orgao",
+                    "displayName": "Órgão"
+                  },
+                  {
+                    "fieldName": "descricao",
+                    "displayName": "Material"
+                  },
+                  {
+                    "fieldName": "unidade",
+                    "displayName": "Unidade"
+                  },
+                  {
+                    "fieldName": "quantidade",
+                    "displayName": "Quantidade"
+                  },
+                  {
+                    "fieldName": "valor_unitario",
+                    "displayName": "Preço unitário"
+                  },
+                  {
+                    "fieldName": "preco_mediano",
+                    "displayName": "Mediana"
+                  },
+                  {
+                    "fieldName": "vezes_mediana",
+                    "displayName": "× mediana"
+                  },
+                  {
+                    "fieldName": "valor_acima_mediana",
+                    "displayName": "Pago acima da mediana"
+                  },
+                  {
+                    "fieldName": "base_preco",
+                    "displayName": "Base"
+                  },
+                  {
+                    "fieldName": "orgaos_comparados",
+                    "displayName": "Órgãos comparados"
+                  },
+                  {
+                    "fieldName": "id_compra",
+                    "displayName": "Compra"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Compras acima de 2× a mediana"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 7,
+            "width": 6,
+            "height": 12
           }
         }
       ]

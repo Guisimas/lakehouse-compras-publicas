@@ -50,6 +50,7 @@ Colunas técnicas em toda tabela Silver:
 | `sk_data_publicacao`, `sk_data_resultado` | → `dim_data` (yyyymmdd; -1 = sem data) |
 | `sk_orgao`, `sk_fornecedor`, `sk_item`, `sk_modalidade` | → dimensões (-1 = desconhecido) |
 | `id_compra_item`, `id_compra`, `numero_item` | Dimensões degeneradas |
+| `unidade` | Unidade de medida do item (maiúsculas, sem espaços nas pontas). Compara preço só entre itens de mesmo código e mesma unidade |
 | `regime_legal`, `sistema_origem`, `compra_excluida` | Atributos de contexto |
 | `quantidade`, `valor_unitario`, `valor_total_item` | Homologado quando existe, senão estimado |
 | `valor_estimado`, `valor_homologado`, `valor_eh_estimado` | Para medir a economia na disputa |

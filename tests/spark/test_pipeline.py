@@ -158,6 +158,7 @@ def test_ponta_a_ponta(spark, ambiente):
         assert linha[sk] != -1, sk
     assert linha.sk_data_publicacao == 20261001 and linha.ano_mes == 202610
     assert linha.valor_eh_estimado is False
+    assert linha.unidade == "UN"
     sem_forn = fato.where(F.col("id_compra_item") == f"{api.COMPRA_LEGADO}-1").first()
     assert sem_forn.sk_fornecedor == -1
     estrangeiro = fato.where(F.col("id_compra_item") == f"{api.COMPRA_PREGAO}-4").first()

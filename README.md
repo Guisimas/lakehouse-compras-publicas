@@ -117,7 +117,7 @@ src/compras/
   gold/         dimensões, SCD2, fato_compras, fato_contratos
   quality/      dq_resultados, reconciliação Silver ↔ Gold, atualidade e volume
   maintenance/  OPTIMIZE / Z-ORDER / VACUUM e benchmark de consultas
-  consultas/    as 5 consultas de negócio + extras, empacotadas no wheel
+  consultas/    as 7 consultas de negócio + extras, empacotadas no wheel
   tasks/        entrypoints das tasks do job (compras-task <etapa>)
 resources/      job semanal, job de backfill e dashboard (Asset Bundle)
 sql/            métricas deste README, alerta de qualidade, rastreabilidade
@@ -241,6 +241,8 @@ O alerta SQL das regras de aviso fica em `sql/alerta_qualidade.sql`.
 | `q3_itens_mais_comprados.sql` | Quais itens são mais comprados, em quantidade e valor? |
 | `q4_evolucao_mensal.sql` | Como os gastos evoluíram mês a mês? |
 | `q5_modalidades.sql` | Quais modalidades concentram mais volume? |
+| `q6_economia_disputa.sql` | Quanto o pregão e a concorrência economizam em relação ao estimado, e quantos itens já têm resultado? |
+| `q7_preco_por_item.sql` | Quais compras pagaram mais que o dobro do preço mediano do mesmo material (mesmo código e unidade, 3+ órgãos)? |
 | `extra_mpe_concentracao_economia.sql` | Participação de micro e pequenas empresas, fornecedores que concentram mais de 30% de um órgão e economia entre valor estimado e homologado |
 
 **Dashboard** "Compras Públicas Federais" (`resources/compras.lvdash.json`), publicado pelo
@@ -248,10 +250,15 @@ bundle:
 
 | Página | O que mostra |
 | --- | --- |
-| **Gastos** | Valor total, número de compras e de itens; evolução mensal por regime legal; órgãos com maior gasto; volume por modalidade; fornecedores com maior valor contratado |
+| **Onde o dinheiro vai** | Valor, compras e itens; gasto por grupo e classe do catálogo; órgãos com maior gasto; evolução mensal por modalidade; fornecedores com maior valor contratado |
+| **Economia na disputa** | Pregão e concorrência: economia (1 − homologado ÷ estimado) nos itens com resultado, sempre ao lado da cobertura (% de itens com resultado); por modalidade, por mês e por órgão |
+| **Preço por item** | Materiais de mesmo código e unidade comprados por 3+ órgãos: compras acima de 2× a mediana e quanto se pagou acima dela |
 | **Qualidade** | Atualidade da ingestão; quarentena aberta por regra; resultados das regras nos últimos 30 dias |
 
-**Benchmark de otimização:** mede as 5 consultas antes e depois do OPTIMIZE/Z-ORDER, no
+As três páginas de negócio têm filtros de mês, órgão, modalidade e grupo do catálogo e mostram
+só a esfera federal (a Gold guarda todas as esferas).
+
+**Benchmark de otimização:** mede as 7 consultas antes e depois do OPTIMIZE/Z-ORDER, no
 workspace, com o entrypoint `compras-task` do wheel, nesta ordem:
 
 ```

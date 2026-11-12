@@ -6,7 +6,7 @@ from importlib import resources
 
 
 def consultas_negocio() -> dict[str, str]:
-    """As 5 consultas q1..q5, na ordem, como texto SQL."""
+    """As consultas q1..q7, na ordem, como texto SQL."""
     pasta = resources.files(__name__)
     return {
         p.name.removesuffix(".sql"): p.read_text(encoding="utf-8")

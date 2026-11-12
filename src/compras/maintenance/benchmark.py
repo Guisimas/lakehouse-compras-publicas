@@ -1,4 +1,4 @@
-"""Benchmark das 5 consultas de negócio e volume por camada.
+"""Benchmark das 7 consultas de negócio e volume por camada.
 
 Uso: ``compras-task benchmark --rotulo antes`` → ``otimizar`` → ``--rotulo depois``.
 Cada consulta roda 3 vezes, com cache limpo, e grava a mediana em

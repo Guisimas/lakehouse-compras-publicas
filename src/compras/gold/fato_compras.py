@@ -17,6 +17,7 @@ import logging
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
+from compras.common import exprs
 from compras.common.delta import tabela_existe
 from compras.config import Settings
 from compras.gold.comum import (
@@ -184,6 +185,7 @@ def construir_fato_compras(
         "id_compra_item",
         "id_compra",
         "numero_item",
+        F.upper(exprs.texto(F.col("unidade"))).alias("unidade"),
         F.col("regime_legal_compra").alias("regime_legal"),
         "sistema_origem",
         "compra_excluida",
