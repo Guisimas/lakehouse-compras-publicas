@@ -281,7 +281,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--janelas", help="Datas separadas por vírgula (saída de 'planejar')")
     p.add_argument("--data-inicio", type=lambda s: parse_data(s) if s else None)
     p.add_argument("--data-fim", type=lambda s: parse_data(s) if s else None)
-    p.add_argument("--dias-reprocessar", default="14,30")
+    p.add_argument("--dias-reprocessar", default="14,30,60,90")
     p.add_argument("--entidades", default=",".join(ENTIDADES))
     p.add_argument("--modo", choices=("incremental", "historico"), default="incremental")
     p.add_argument("--ingestao-no-job", default="true")

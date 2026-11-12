@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 from compras.common.runtime import dias, planejar_janelas
 
@@ -35,14 +35,23 @@ def test_recuperacao_limitada_e_reprocessamento():
         dias_reprocessar=(7, 30, 60),
         max_dias_recuperacao=3,
     )
-    assert j == [
-        date(2026, 9, 1),  # 60 dias antes
-        date(2026, 10, 1),  # 30 dias antes
-        date(2026, 10, 24),  # 7 dias antes
-        date(2026, 10, 29),
-        date(2026, 10, 30),
-        date(2026, 10, 31),
-    ]
+    novas = [date(2026, 10, 29), date(2026, 10, 30), date(2026, 10, 31)]
+    esperado = {n - timedelta(days=d) for n in novas for d in (7, 30, 60)} | set(novas)
+    assert j == sorted(esperado)
+    assert date(2026, 8, 30) in j and date(2026, 9, 1) in j  # 60 dias antes de cada dia
+
+
+def test_run_semanal_reprocessa_cada_dia_em_cada_atraso():
+    """Com run semanal, todos os 7 dias voltam 14 e 30 dias depois, e não só um deles."""
+    j = planejar_janelas(
+        data_inicio=None,
+        data_fim=date(2026, 11, 15),
+        ultima_janela_ok=date(2026, 11, 8),
+        dias_reprocessar=(14, 30),
+    )
+    assert len(j) == 21
+    assert set(dias(date(2026, 10, 26), date(2026, 11, 1))) <= set(j)  # 14 dias antes
+    assert set(dias(date(2026, 10, 10), date(2026, 10, 16))) <= set(j)  # 30 dias antes
 
 
 def test_watermark_em_dia_nao_duplica():

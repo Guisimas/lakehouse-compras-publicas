@@ -56,14 +56,17 @@ def planejar_janelas(
 
     - Com ``data_inicio``/``data_fim`` explícitos (backfill), devolve exatamente o intervalo.
     - Sem eles, processa de ``ultima_janela_ok + 1`` até ontem (recuperando falhas, no máximo
-      ``max_dias_recuperacao`` dias) e acrescenta janelas antigas a reprocessar (14, 30… dias antes)
-      para capturar dados que a fonte publica com atraso.
+      ``max_dias_recuperacao`` dias) e acrescenta, para cada um desses dias, as janelas
+      ``dias_reprocessar`` dias antes (14, 30, 60, 90). Assim cada dia é baixado de novo em
+      cada um desses atrasos, qualquer que seja a frequência do run: a fonte publica itens e
+      resultados de compra com semanas de atraso.
     """
     fim = data_fim or (referencia or ontem_brt())
     if data_inicio is not None:
         return list(dias(data_inicio, fim))
     inicio = (ultima_janela_ok + timedelta(days=1)) if ultima_janela_ok else fim
     inicio = max(inicio, fim - timedelta(days=max_dias_recuperacao - 1))
-    janelas = set(dias(inicio, fim)) if inicio <= fim else {fim}
-    janelas.update(fim - timedelta(days=d) for d in dias_reprocessar if d > 0)
+    novas = set(dias(inicio, fim)) if inicio <= fim else {fim}
+    janelas = set(novas)
+    janelas.update(j - timedelta(days=d) for j in novas for d in dias_reprocessar if d > 0)
     return sorted(janelas)

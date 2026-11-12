@@ -3,7 +3,9 @@
 Garantias:
 - Idempotência: o destino depende só de entidade, janela, endpoint, fan-out e página.
   Um fan-out que já tem marcador ``_SUCCESS`` é pulado; com ``forcar=True`` ele é apagado e
-  baixado de novo, sobrescrevendo os mesmos arquivos.
+  baixado de novo, sobrescrevendo os mesmos arquivos. Com ``refazer=True`` só os endpoints
+  principais (sem ``depende_de``) são baixados de novo; complementos e fornecedores já
+  baixados continuam pulados.
 - Retomada: se um run caiu no meio, o próximo continua da última página gravada.
 - Log: toda execução gera um registro de log, inclusive as que falham.
 """
@@ -63,7 +65,13 @@ class Ingestor:
         return date.fromisoformat(wm.ultima_janela) <= hoje - timedelta(days=refresh)
 
     def ingerir(
-        self, entidade: str, janela: date, *, modo: Modo = "incremental", forcar: bool = False
+        self,
+        entidade: str,
+        janela: date,
+        *,
+        modo: Modo = "incremental",
+        forcar: bool = False,
+        refazer: bool = False,
     ) -> RegistroLog:
         specs = endpoints_da_entidade(entidade, modo)
         chave_log = janela.isoformat()
@@ -80,7 +88,8 @@ class Ingestor:
         try:
             for spec in specs:
                 try:
-                    for r in self._ingerir_endpoint(spec, janela, forcar):
+                    forcar_spec = forcar or (refazer and not spec.depende_de)
+                    for r in self._ingerir_endpoint(spec, janela, forcar_spec):
                         reg.fanouts += 1
                         reg.fanouts_pulados += int(r.pulado)
                         reg.paginas += r.paginas

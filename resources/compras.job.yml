@@ -8,8 +8,8 @@ resources:
     compras_semanal:
       name: compras-semanal
       description: >-
-        Carga semanal incremental (os dias desde o último run, até ontem, mais as janelas de
-        14 e 30 dias atrás; contratos por varredura de 365 dias)
+        Carga semanal incremental (os dias desde o último run, até ontem, e os mesmos dias
+        14, 30, 60 e 90 dias antes; contratos por varredura de 365 dias)
         → Bronze → Silver → Gold → qualidade → OPTIMIZE.
       max_concurrent_runs: 1
       schedule:
@@ -25,7 +25,7 @@ resources:
         - name: data_fim
           default: ""
         - name: dias_reprocessar
-          default: "14,30"
+          default: "14,30,60,90"
         - name: modo
           default: incremental
         - name: ingestao_no_job
