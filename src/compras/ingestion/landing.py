@@ -160,9 +160,12 @@ class LandingFanout:
         - só contam contratos incluídos depois da inclusão mais recente da varredura
           anterior. A fonte publica em lotes, então uma janela fixa de dias falharia;
           na primeira varredura nenhum conta (os fornecedores viram membros inferidos);
-        - CNPJs consultados nos últimos ``dias_sem_reconsulta`` dias ficam de fora.
 
         Sem ``contratos_incrementais`` (backfill), todos os contratos contam.
+
+        Em qualquer modo, CNPJs (de contratos ou de itens) com cadastro consultado nos
+        últimos ``dias_sem_reconsulta`` dias ficam de fora: o mesmo fornecedor vende em muitos
+        dias, e cada consulta custa ~1,4 s.
         """
         self.landing = landing
         self.contratos_incrementais = contratos_incrementais
@@ -224,11 +227,11 @@ class LandingFanout:
                 incluido = str(r.get("dataHoraInclusao") or "")
                 if corte is not None and (not incluido or incluido > corte):
                     do_contrato |= _cnpjs(r, campos)
-            candidatos |= do_contrato - self._consultados_recentes(janela) - candidatos
+            candidatos |= do_contrato
         else:
             for r in contratos:
                 candidatos |= _cnpjs(r, campos)
-        return sorted(candidatos)
+        return sorted(candidatos - self._consultados_recentes(janela))
 
     def _corte_inclusao(self, chave: str) -> str | None:
         """Inclusão mais recente da varredura anterior (``None`` se esta é a primeira)."""

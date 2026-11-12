@@ -36,6 +36,11 @@ resources:
           default: "false"
         - name: otimizar
           default: "true"
+        # Entidades baixadas pela task ingestao. No backfill em blocos, só o último bloco
+        # inclui contratos: a varredura de 365 dias (e o cadastro dos fornecedores dela) roda
+        # uma vez, em vez de uma por bloco. Separadas por "+" (a vírgula separa os --params).
+        - name: entidades
+          default: "orgaos+catalogo+licitacoes+itens_compra+contratos+fornecedores"
       environments: &ambiente
         - environment_key: default
           spec:
@@ -89,6 +94,8 @@ resources:
               - "{{job.parameters.modo}}"
               - "--ingestao-no-job"
               - "{{job.parameters.ingestao_no_job}}"
+              - "--entidades"
+              - "{{job.parameters.entidades}}"
         - task_key: bronze
           environment_key: default
           depends_on:
@@ -217,5 +224,10 @@ resources:
           default: "false"
         - name: otimizar
           default: "true"
+        # Entidades baixadas pela task ingestao. No backfill em blocos, só o último bloco
+        # inclui contratos: a varredura de 365 dias (e o cadastro dos fornecedores dela) roda
+        # uma vez, em vez de uma por bloco. Separadas por "+" (a vírgula separa os --params).
+        - name: entidades
+          default: "orgaos+catalogo+licitacoes+itens_compra+contratos+fornecedores"
       environments: *ambiente
       tasks: *tarefas

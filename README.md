@@ -160,10 +160,13 @@ tests/          unit (sem Spark) e spark (Delta local), com fixtures versionadas
    ```bash
    databricks bundle run compras_semanal -t dev
    ```
-5. **Carga histórica, se quiser** (inclui os endpoints anuais do Legado)
+5. **Carga histórica, se quiser** (inclui os endpoints anuais do Legado), em blocos e em ordem
+   cronológica. Só o último bloco inclui `contratos`: a varredura de contratos cobre 365 dias de
+   uma vez e consulta o cadastro de todos os fornecedores deles (~30 mil CNPJs). As entidades
+   vão separadas por `+`, porque o `--params` já usa a vírgula
    ```bash
    databricks bundle run compras_backfill -t dev \
-       --params data_inicio=2025-10-01,data_fim=2025-10-31
+       --params data_inicio=2025-10-01,data_fim=2025-10-31,entidades=orgaos+catalogo+licitacoes+itens_compra+fornecedores
    ```
 
 Toda a execução acontece no Databricks: ingestão, transformação, qualidade e manutenção. Cada
