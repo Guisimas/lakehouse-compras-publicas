@@ -245,6 +245,10 @@ def etapa_otimizar(args: argparse.Namespace, settings: Settings) -> None:
     from compras.common.spark import obter_spark
     from compras.maintenance.optimize import otimizar
 
+    if not _bool(args.otimizar):
+        # Backfill antes do benchmark: as tabelas ficam sem OPTIMIZE para a medição "antes".
+        log.info("Otimização desligada neste run (--otimizar false)")
+        return
     otimizar(
         obter_spark(),
         settings,
@@ -288,6 +292,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--forcar", default="false")
     p.add_argument("--completo", default="false", help="Reconstrói todas as partições da Gold")
     p.add_argument("--vacuum", default="true")
+    p.add_argument("--otimizar", default="true", help="false pula a task otimizar")
     p.add_argument(
         "--intervalo-otimizacao",
         default="6",

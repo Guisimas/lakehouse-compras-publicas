@@ -1,0 +1,51 @@
+# Alerta de qualidade (Databricks SQL), criado pelo bundle. Toda segunda às 20:00, depois do
+# run semanal (que começa às 06:00 e pode levar até ~6 h de ingestão). Dispara quando o último
+# run tem aviso ou falha que não estava no run anterior, ou aviso de atualidade (DQ-16).
+# A consulta é a mesma de sql/alerta_qualidade.sql (o teste tests/unit/test_alerta.py confere).
+
+resources:
+  alerts:
+    compras_alerta_qualidade:
+      display_name: "Compras: problemas de qualidade novos"
+      warehouse_id: ${var.warehouse_id}
+      query_text: |
+        WITH runs AS (
+          SELECT run_id, row_number() OVER (ORDER BY MAX(data_execucao) DESC) AS ordem
+          FROM quality.dq_resultados
+          GROUP BY run_id
+        ),
+        problemas AS (
+          SELECT r.ordem, d.regra, d.entidade, coalesce(d.detalhe, '') AS detalhe
+          FROM quality.dq_resultados d
+          JOIN runs r ON r.run_id = d.run_id
+          WHERE r.ordem <= 2 AND d.status IN ('aviso', 'falha')
+        ),
+        novos AS (
+          SELECT a.regra, a.entidade, a.detalhe
+          FROM problemas a
+          LEFT ANTI JOIN problemas p
+            ON p.ordem = 2 AND p.regra = a.regra AND p.entidade = a.entidade AND p.detalhe = a.detalhe
+          WHERE a.ordem = 1
+          UNION
+          SELECT regra, entidade, detalhe FROM problemas WHERE ordem = 1 AND regra = 'DQ-16'
+        )
+        SELECT
+          COUNT(*)                                                    AS problemas_novos,
+          concat_ws('; ', collect_list(concat(regra, ' ', entidade))) AS regras
+        FROM novos
+      evaluation:
+        source:
+          name: problemas_novos
+        comparison_operator: GREATER_THAN
+        threshold:
+          value:
+            double_value: 0
+        empty_result_state: OK
+        notification:
+          notify_on_ok: false
+          subscriptions:
+            - user_email: ${workspace.current_user.userName}
+      schedule:
+        quartz_cron_schedule: "0 0 20 ? * MON"
+        timezone_id: America/Sao_Paulo
+        pause_status: ${var.agendamento}
