@@ -301,6 +301,7 @@ def test_tasks_do_job(spark, ambiente, monkeypatch):
         forcar="false",
         completo="false",
         vacuum="false",
+        otimizar="true",
         intervalo_otimizacao="7",
         falhar_em_aviso="false",
     )
