@@ -69,7 +69,9 @@ resources:
           max_retries: 2
           min_retry_interval_millis: 120000
           retry_on_timeout: true
-          timeout_seconds: 10800
+          # Run semanal: ~9 janelas de itens (complemento do PNCP, ~20 min cada) + varredura
+          # de contratos (~1h40). O run do zero de dev, com 3 janelas, levou 2h36.
+          timeout_seconds: 21600
           python_wheel_task:
             package_name: compras
             entry_point: compras-task
