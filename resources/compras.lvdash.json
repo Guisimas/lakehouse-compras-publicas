@@ -1412,7 +1412,7 @@
         },
         {
           "widget": {
-            "name": "p2_orgao_economia",
+            "name": "p2_orgao",
             "queries": [
               {
                 "name": "main_query",
@@ -1424,7 +1424,27 @@
                       "expression": "`orgao_top`"
                     },
                     {
-                      "name": "valor",
+                      "name": "itens",
+                      "expression": "COUNT(`orgao_top`)"
+                    },
+                    {
+                      "name": "cobertura",
+                      "expression": "100 * AVG(`tem_resultado`)"
+                    },
+                    {
+                      "name": "estimado",
+                      "expression": "SUM(`estimado_com_resultado`)"
+                    },
+                    {
+                      "name": "homologado",
+                      "expression": "SUM(`valor_homologado`)"
+                    },
+                    {
+                      "name": "economizado",
+                      "expression": "SUM(`estimado_com_resultado`) - SUM(`valor_homologado`)"
+                    },
+                    {
+                      "name": "economia",
                       "expression": "100 * (1 - SUM(`valor_homologado`) / SUM(`estimado_com_resultado`))"
                     }
                   ],
@@ -1434,93 +1454,60 @@
             ],
             "spec": {
               "version": 3,
-              "widgetType": "bar",
+              "widgetType": "pivot",
               "encodings": {
-                "x": {
-                  "fieldName": "valor",
-                  "scale": {
-                    "type": "quantitative"
-                  },
-                  "displayName": "economia (%)"
-                },
-                "y": {
-                  "fieldName": "orgao_top",
-                  "scale": {
-                    "type": "categorical",
-                    "sort": {
-                      "by": "x-reversed"
+                "rows": [
+                  {
+                    "fieldName": "orgao_top",
+                    "displayName": "Órgão"
+                  }
+                ],
+                "cell": {
+                  "type": "multi-cell",
+                  "fields": [
+                    {
+                      "fieldName": "itens",
+                      "cellType": "text",
+                      "displayName": "Itens"
+                    },
+                    {
+                      "fieldName": "cobertura",
+                      "cellType": "text",
+                      "displayName": "Cobertura (%)"
+                    },
+                    {
+                      "fieldName": "estimado",
+                      "cellType": "text",
+                      "displayName": "Estimado dos itens com resultado (R$)"
+                    },
+                    {
+                      "fieldName": "homologado",
+                      "cellType": "text",
+                      "displayName": "Homologado (R$)"
+                    },
+                    {
+                      "fieldName": "economizado",
+                      "cellType": "text",
+                      "displayName": "Valor economizado (R$)"
+                    },
+                    {
+                      "fieldName": "economia",
+                      "cellType": "text",
+                      "displayName": "Economia sobre o estimado (%)"
                     }
-                  },
-                  "displayName": "orgao_top"
+                  ]
                 }
               },
               "frame": {
                 "showTitle": true,
-                "title": "Economia por órgão (%)"
+                "title": "Economia e cobertura por órgão"
               }
             }
           },
           "position": {
             "x": 0,
             "y": 13,
-            "width": 3,
-            "height": 8
-          }
-        },
-        {
-          "widget": {
-            "name": "p2_orgao_cobertura",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "economia",
-                  "fields": [
-                    {
-                      "name": "orgao_top",
-                      "expression": "`orgao_top`"
-                    },
-                    {
-                      "name": "valor",
-                      "expression": "100 * AVG(`tem_resultado`)"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "widgetType": "bar",
-              "encodings": {
-                "x": {
-                  "fieldName": "valor",
-                  "scale": {
-                    "type": "quantitative"
-                  },
-                  "displayName": "cobertura (%)"
-                },
-                "y": {
-                  "fieldName": "orgao_top",
-                  "scale": {
-                    "type": "categorical",
-                    "sort": {
-                      "by": "x-reversed"
-                    }
-                  },
-                  "displayName": "orgao_top"
-                }
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "Cobertura por órgão (%)"
-              }
-            }
-          },
-          "position": {
-            "x": 3,
-            "y": 13,
-            "width": 3,
+            "width": 6,
             "height": 8
           }
         }
