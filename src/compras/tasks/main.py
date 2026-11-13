@@ -312,7 +312,11 @@ def main(argv: list[str] | None = None) -> int:
     settings = Settings()
     # parâmetros vazios vindos do job ("") viram None
     args.run_id = args.run_id or novo_run_id()
-    args.entidades = [e.strip() for e in args.entidades.split(",") if e.strip()]
+    # "+" também separa: no `bundle run --params` a vírgula já separa os parâmetros
+    args.entidades = [e.strip() for e in args.entidades.replace("+", ",").split(",") if e.strip()]
+    desconhecidas = set(args.entidades) - set(ENTIDADES)
+    if desconhecidas:
+        p.error(f"Entidades desconhecidas: {sorted(desconhecidas)}")
     log.info("Etapa %s | run_id=%s | catálogo=%s", args.etapa, args.run_id, settings.catalog)
 
     if args.etapa == "tudo":  # execução local de ponta a ponta

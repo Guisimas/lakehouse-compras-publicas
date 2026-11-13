@@ -289,8 +289,20 @@ def test_fornecedores_da_varredura_so_de_contratos_novos(tmp_path):
     assert incremental.cnpjs_fornecedores(J) == sorted([b, c])
     # primeira varredura: nenhum contrato conta (fornecedores viram membros inferidos)
     assert incremental.cnpjs_fornecedores(date(2026, 9, 24)) == []
-    # backfill: todos
-    assert LandingFanout(landing).cnpjs_fornecedores(J) == sorted([a, b, c, d])
+    # backfill: todos os contratos, menos quem foi consultado nos últimos 30 dias
+    assert LandingFanout(landing).cnpjs_fornecedores(J) == sorted([a, b, c])
+
+
+def test_fornecedores_dos_itens_nao_repetem_consulta_recente(tmp_path):
+    root = str(tmp_path / "landing").replace("\\", "/")
+    landing = Landing(LocalStorage(), root)
+    a, b = "11222333000181", "04252011000110"
+    envelope = {"meta": {}, "payload": {"resultado": [{"codFornecedor": a}, {"codFornecedor": b}]}}
+    landing.gravar_pagina("itens_compra", "2026-10-01", "pncp_itens", "all", 1, envelope)
+    landing.marcar_sucesso("fornecedores", "2026-09-10", "fornecedor", f"cnpj{a}", {})
+    landing.marcar_sucesso("fornecedores", "2026-08-01", "fornecedor", f"cnpj{b}", {})
+    # a foi consultado há 21 dias; b há 61, então volta a ser consultado
+    assert LandingFanout(landing).cnpjs_fornecedores(J) == [b]
 
 
 ITENS_PNCP = f"{BASE}/modulo-contratacoes/2_consultarItensContratacoes_PNCP_14133"

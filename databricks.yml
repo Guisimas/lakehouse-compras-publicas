@@ -54,6 +54,9 @@ targets:
     mode: production
     variables:
       catalog: prd_compras
+      # Pausado durante a carga histórica (backfill em blocos), para o run semanal não gravar
+      # nas mesmas tabelas ao mesmo tempo. Volta a UNPAUSED quando a carga terminar.
+      agendamento: PAUSED
     workspace:
       root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
     permissions:
