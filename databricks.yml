@@ -49,6 +49,8 @@ targets:
     default: true
     variables:
       catalog: dev_compras
+      # Em dev o job e o alerta só rodam sob demanda (databricks bundle run).
+      agendamento: PAUSED
 
   prod:
     mode: production
