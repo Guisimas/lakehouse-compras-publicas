@@ -48,7 +48,9 @@ def executar_ingestao(
     )
     # Fornecedores da varredura de contratos: só os de contratos novos (ver LandingFanout).
     fanout = LandingFanout(landing, contratos_incrementais=modo != "historico")
-    ingestor = Ingestor(client, landing, controle, run_id, fanout)
+    ingestor = Ingestor(
+        client, landing, controle, run_id, fanout, paralelismo=settings.fanouts_paralelos
+    )
     # Janelas antigas do run incremental (as de reprocessamento) são baixadas de novo.
     limite_refazer = (
         max(janelas) - timedelta(days=settings.dias_refazer_janela)

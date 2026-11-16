@@ -8,6 +8,10 @@ Garantias:
   baixados continuam pulados.
 - Retomada: se um run caiu no meio, o próximo continua da última página gravada.
 - Log: toda execução gera um registro de log, inclusive as que falham.
+- Paralelismo: os fan-outs de um endpoint são independentes (cada um tem seus arquivos e o
+  seu ``_SUCCESS``) e rodam em ``paralelismo`` threads. O teto de requisições continua o do
+  ``ComprasClient``, compartilhado entre as threads; o ganho vem de não esperar a resposta de
+  uma consulta para disparar a próxima (fornecedores: um CNPJ por consulta, ~2,4 s cada).
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ from __future__ import annotations
 import logging
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -49,12 +54,14 @@ class Ingestor:
         controle: Controle,
         run_id: str,
         fanout_ctx: FanoutContext | None = None,
+        paralelismo: int = 1,
     ):
         self.client = client
         self.landing = landing
         self.controle = controle
         self.run_id = run_id
         self.fanout_ctx = fanout_ctx
+        self.paralelismo = max(1, paralelismo)
 
     # ------------------------------------------------------------------ público
     def snapshot_vencido(self, entidade: str, hoje: date) -> bool:
@@ -138,8 +145,24 @@ class Ingestor:
     # ------------------------------------------------------------------ interno
     def _ingerir_endpoint(self, spec: EndpointSpec, janela: date, forcar: bool):
         chave = chave_janela(janela, spec.tipo_janela)
-        for fanout, params in spec.params(janela, self.fanout_ctx):
-            yield self._ingerir_fanout(spec, chave, fanout, params, forcar)
+        fanouts = spec.params(janela, self.fanout_ctx)
+        if self.paralelismo == 1 or len(fanouts) <= 1:
+            for fanout, params in fanouts:
+                yield self._ingerir_fanout(spec, chave, fanout, params, forcar)
+            return
+        pool = ThreadPoolExecutor(self.paralelismo, thread_name_prefix=f"ingestao-{spec.nome}")
+        try:
+            futuros = [
+                pool.submit(self._ingerir_fanout, spec, chave, fanout, params, forcar)
+                for fanout, params in fanouts
+            ]
+            # Resultados na ordem dos fan-outs: o log sai igual ao da execução sequencial.
+            for futuro in futuros:
+                yield futuro.result()
+        finally:
+            # Na falha de um fan-out, os que ainda não começaram são cancelados; os que estão
+            # em andamento terminam (ou caem) e ficam com ou sem _SUCCESS, como antes.
+            pool.shutdown(wait=True, cancel_futures=True)
 
     def _ingerir_fanout(
         self, spec: EndpointSpec, chave: str, fanout: str, params: dict, forcar: bool

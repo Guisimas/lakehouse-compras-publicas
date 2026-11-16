@@ -1,4 +1,6 @@
 import json
+import threading
+import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -186,6 +188,74 @@ def test_contratos_fanout_por_orgao_do_snapshot(ambiente):
     # varredura: 365 dias terminando na data de referência
     assert params["dataVigenciaInicialMin"] == "2025-10-02"
     assert params["dataVigenciaInicialMax"] == "2026-10-01"
+
+
+def _orgaos_no_snapshot(landing, codigos):
+    landing.gravar_pagina(
+        "orgaos",
+        J.isoformat(),
+        "orgao",
+        "all",
+        1,
+        {
+            "meta": {},
+            "payload": {"resultado": [{"codigoOrgao": c, "usoSisg": True} for c in codigos]},
+        },
+    )
+
+
+@respx.mock
+def test_fanouts_em_paralelo_com_log_na_ordem(ambiente):
+    landing, controle, client, _ = ambiente
+    codigos = list(range(10000, 10008))
+    _orgaos_no_snapshot(landing, codigos)
+    lock = threading.Lock()
+    estado = {"agora": 0, "maximo": 0}
+
+    def resp(req):
+        with lock:
+            estado["agora"] += 1
+            estado["maximo"] = max(estado["maximo"], estado["agora"])
+        time.sleep(0.05)
+        with lock:
+            estado["agora"] -= 1
+        org = req.url.params["codigoOrgao"]
+        return httpx.Response(200, json={"resultado": [{"org": org}], "totalPaginas": 1})
+
+    respx.get(f"{BASE}/modulo-contratos/1_consultarContratos").mock(side_effect=resp)
+    ing = Ingestor(client, landing, controle, "run-1", LandingFanout(landing), paralelismo=4)
+    reg = ing.ingerir("contratos", J)
+    assert reg.status == "sucesso"
+    assert reg.fanouts == 8 and reg.paginas == 8 and reg.linhas == 8
+    assert 1 < estado["maximo"] <= 4
+    assert [d["fanout"] for d in reg.detalhes] == sorted(d["fanout"] for d in reg.detalhes)
+
+
+@respx.mock
+def test_fanout_que_falha_em_paralelo_derruba_a_entidade_e_os_outros_retomam(ambiente):
+    landing, controle, client, _ = ambiente
+    _orgaos_no_snapshot(landing, list(range(10000, 10006)))
+    estado = {"falhar": True}
+
+    def resp(req):
+        org = req.url.params["codigoOrgao"]
+        if org == "10003" and estado["falhar"]:
+            return httpx.Response(400, text="erro")
+        return httpx.Response(200, json={"resultado": [{"org": org}], "totalPaginas": 1})
+
+    rota = respx.get(f"{BASE}/modulo-contratos/1_consultarContratos").mock(side_effect=resp)
+    ing = Ingestor(client, landing, controle, "run-1", LandingFanout(landing), paralelismo=3)
+    reg = ing.ingerir("contratos", J)
+    assert reg.status == "falha" and "HTTP 400" in reg.erro
+    assert controle.ler_watermark("contratos") is None
+
+    estado["falhar"] = False
+    antes = len(rota.calls)
+    reg = ing.ingerir("contratos", J)
+    assert reg.status == "sucesso" and reg.fanouts == 6
+    refeitos = {c.request.url.params["codigoOrgao"] for c in list(rota.calls)[antes:]}
+    assert "10003" in refeitos
+    assert reg.fanouts_pulados == 6 - len(refeitos)  # os que tinham _SUCCESS não voltam
 
 
 @respx.mock
