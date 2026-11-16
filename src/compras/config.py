@@ -31,6 +31,9 @@ class Settings:
     )
     tamanho_pagina: int = field(default_factory=lambda: int(_env("TAMANHO_PAGINA", "500")))
     req_por_segundo: float = field(default_factory=lambda: float(_env("REQ_POR_SEGUNDO", "2")))
+    # Fan-outs do mesmo endpoint baixados ao mesmo tempo. O teto continua em req_por_segundo;
+    # com ~2,4 s de resposta, 4 consultas simultâneas chegam perto dele.
+    fanouts_paralelos: int = field(default_factory=lambda: int(_env("FANOUTS_PARALELOS", "4")))
     max_tentativas: int = field(default_factory=lambda: int(_env("MAX_TENTATIVAS", "6")))
     timeout_s: float = field(default_factory=lambda: float(_env("TIMEOUT_S", "60")))
     # No modo incremental, janelas com este atraso ou mais em relação à mais recente do run
